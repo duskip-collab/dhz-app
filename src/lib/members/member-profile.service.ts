@@ -15,6 +15,7 @@ import { PERMISSIONS } from "@/lib/auth/permissions";
 import { checkPermission, checkPermissionServer } from "./members.service";
 import { createAuthError } from "./members.errors";
 import type { Member, MemberGuardian } from "./members.service";
+import type { MemberCourse } from "@/types/member-courses.types";
 
 // =============================================================================
 // TYPY – PROFIL ČLENA
@@ -82,6 +83,7 @@ export interface MemberProfile {
   gear: GearAssignment[];
   training: TrainingAttendance[];
   competitions: CompetitionLineup[];
+  courses: MemberCourse[];
 }
 
 // =============================================================================
@@ -98,6 +100,7 @@ export interface MemberProfile {
  * - pridelená výstroj (active + archivovaná)
  * - tréningy a dochádzka
  * - súťaže a lineups
+ * - kurzy a certifikácie
  * 
  * @param memberId UUID člena
  * @throws {Error} 401 ak nie je prihlásený, 403 ak nemá oprávnenie, 404 ak člen neexistuje
@@ -117,12 +120,13 @@ export async function getMemberProfile(memberId: string): Promise<MemberProfile>
   const supabase = await createClient();
 
   // Paralelné načítanie všetkých sekcií
-  const [member, guardians, gear, training, competitions] = await Promise.all([
+  const [member, guardians, gear, training, competitions, courses] = await Promise.all([
     fetchMemberBasic(supabase, memberId),
     fetchMemberGuardians(supabase, memberId),
     fetchMemberGear(supabase, memberId),
     fetchMemberTraining(supabase, memberId),
     fetchMemberCompetitions(supabase, memberId),
+    fetchMemberCourses(supabase, memberId),
   ]);
 
   return {
@@ -131,6 +135,7 @@ export async function getMemberProfile(memberId: string): Promise<MemberProfile>
     gear,
     training,
     competitions,
+    courses,
   };
 }
 
@@ -296,9 +301,30 @@ async function fetchMemberCompetitions(
   return (data || []) as CompetitionLineup[];
 }
 
+/**
+ * fetchMemberCourses – Kurzy a certifikácie člena
+ */
+async function fetchMemberCourses(
+  supabase: any,
+  memberId: string
+): Promise<MemberCourse[]> {
+  const { data, error } = await supabase
+    .from("member_courses")
+    .select("*")
+    .eq("member_id", memberId)
+    .order("certification_date", { ascending: false });
+
+  if (error) {
+    console.error("[fetchMemberCourses]", error);
+    return [];
+  }
+
+  return (data || []) as MemberCourse[];
+}
+
 // =============================================================================
 // ŠTATISTIKY – AGREGÁCIA ZISKOV
-// =============================================================================
+// ============================================================================= 
 
 export interface MemberProfileStats {
   totalGearAssigned: number;

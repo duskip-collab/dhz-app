@@ -1,16 +1,18 @@
 'use client';
 
 import { useState } from 'react';
-import { Calendar, Briefcase, Trophy, Heart, FileText, AlertCircle, CheckCircle, Clock, XCircle } from 'lucide-react';
+import { Calendar, Briefcase, Trophy, Heart, FileText, AlertCircle, CheckCircle, Clock, XCircle, BookOpen } from 'lucide-react';
 import type { MemberProfile, MemberProfileStats } from '@/lib/members/member-profile.service';
+import { CoursesTab } from './CoursesTab';
 
-type TabId = 'overview' | 'gear' | 'training' | 'competitions' | 'guardians';
+type TabId = 'overview' | 'gear' | 'training' | 'competitions' | 'courses' | 'guardians';
 
 const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
   { id: 'overview', label: 'Prehľad', icon: <AlertCircle className="h-4 w-4" /> },
   { id: 'gear', label: 'Výstroj', icon: <Briefcase className="h-4 w-4" /> },
   { id: 'training', label: 'Tréningy', icon: <Calendar className="h-4 w-4" /> },
   { id: 'competitions', label: 'Súťaže', icon: <Trophy className="h-4 w-4" /> },
+  { id: 'courses', label: 'Kurzy', icon: <BookOpen className="h-4 w-4" /> },
   { id: 'guardians', label: 'Opatrovníci', icon: <Heart className="h-4 w-4" /> },
 ];
 
@@ -18,10 +20,12 @@ export function MemberProfileContent({
   profile,
   photoUrl,
   stats,
+  canEdit = false,
 }: {
   profile: MemberProfile;
   photoUrl: string | null;
   stats: MemberProfileStats;
+  canEdit?: boolean;
 }) {
   const [activeTab, setActiveTab] = useState<TabId>('overview');
 
@@ -60,6 +64,13 @@ export function MemberProfileContent({
         )}
         {activeTab === 'competitions' && (
           <CompetitionsTab competitions={profile.competitions} />
+        )}
+        {activeTab === 'courses' && (
+          <CoursesTab
+            memberId={profile.member.id}
+            courses={profile.courses}
+            canEdit={canEdit}
+          />
         )}
         {activeTab === 'guardians' && (
           <GuardiansTab guardians={profile.guardians} />
