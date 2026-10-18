@@ -16,6 +16,7 @@ import { checkPermission, checkPermissionServer } from "./members.service";
 import { createAuthError } from "./members.errors";
 import type { Member, MemberGuardian } from "./members.service";
 import type { MemberCourse } from "@/types/member-courses.types";
+import type { MemberDrivingLicense } from "@/types/member-driving-licenses.types";
 
 // =============================================================================
 // TYPY – PROFIL ČLENA
@@ -84,6 +85,7 @@ export interface MemberProfile {
   training: TrainingAttendance[];
   competitions: CompetitionLineup[];
   courses: MemberCourse[];
+  driving_licenses: MemberDrivingLicense[];
 }
 
 // =============================================================================
@@ -120,13 +122,14 @@ export async function getMemberProfile(memberId: string): Promise<MemberProfile>
   const supabase = await createClient();
 
   // Paralelné načítanie všetkých sekcií
-  const [member, guardians, gear, training, competitions, courses] = await Promise.all([
+  const [member, guardians, gear, training, competitions, courses, driving_licenses] = await Promise.all([
     fetchMemberBasic(supabase, memberId),
     fetchMemberGuardians(supabase, memberId),
     fetchMemberGear(supabase, memberId),
     fetchMemberTraining(supabase, memberId),
     fetchMemberCompetitions(supabase, memberId),
     fetchMemberCourses(supabase, memberId),
+    fetchMemberDrivingLicenses(supabase, memberId),
   ]);
 
   return {
@@ -136,6 +139,7 @@ export async function getMemberProfile(memberId: string): Promise<MemberProfile>
     training,
     competitions,
     courses,
+    driving_licenses,
   };
 }
 
@@ -320,6 +324,28 @@ async function fetchMemberCourses(
   }
 
   return (data || []) as MemberCourse[];
+}
+
+/**
+ * fetchMemberDrivingLicenses – Vodičské preukazy člena
+ */
+async function fetchMemberDrivingLicenses(
+  supabase: any,
+  memberId: string
+): Promise<MemberDrivingLicense[]> {
+  const { data, error } = await supabase
+    .from("member_driving_licenses")
+    .select("*")
+    .eq("member_id", memberId)
+    .order("category", { ascending: true })
+    .limit(50);
+
+  if (error) {
+    console.error("[fetchMemberDrivingLicenses]", error);
+    return [];
+  }
+
+  return (data || []) as MemberDrivingLicense[];
 }
 
 // =============================================================================

@@ -1,11 +1,12 @@
 'use client';
 
 import { useState } from 'react';
-import { Calendar, Briefcase, Trophy, Heart, FileText, AlertCircle, CheckCircle, Clock, XCircle, BookOpen } from 'lucide-react';
+import { Calendar, Briefcase, Trophy, Heart, FileText, AlertCircle, CheckCircle, Clock, XCircle, BookOpen, Zap } from 'lucide-react';
 import type { MemberProfile, MemberProfileStats } from '@/lib/members/member-profile.service';
 import { CoursesTab } from './CoursesTab';
+import DrivingLicensesTab from './DrivingLicensesTab';
 
-type TabId = 'overview' | 'gear' | 'training' | 'competitions' | 'courses' | 'guardians';
+type TabId = 'overview' | 'gear' | 'training' | 'competitions' | 'courses' | 'driving_licenses' | 'guardians';
 
 const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
   { id: 'overview', label: 'Prehľad', icon: <AlertCircle className="h-4 w-4" /> },
@@ -13,6 +14,7 @@ const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
   { id: 'training', label: 'Tréningy', icon: <Calendar className="h-4 w-4" /> },
   { id: 'competitions', label: 'Súťaže', icon: <Trophy className="h-4 w-4" /> },
   { id: 'courses', label: 'Kurzy', icon: <BookOpen className="h-4 w-4" /> },
+  { id: 'driving_licenses', label: 'Vodiče', icon: <Zap className="h-4 w-4" /> },
   { id: 'guardians', label: 'Opatrovníci', icon: <Heart className="h-4 w-4" /> },
 ];
 
@@ -69,6 +71,12 @@ export function MemberProfileContent({
           <CoursesTab
             memberId={profile.member.id}
             courses={profile.courses}
+            canEdit={canEdit}
+          />
+        )}
+        {activeTab === 'driving_licenses' && (
+          <DrivingLicensesTab
+            memberId={profile.member.id}
             canEdit={canEdit}
           />
         )}
