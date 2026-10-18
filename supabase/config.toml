@@ -1,0 +1,29 @@
+# Supabase CLI configuration for DHZ Digital OS
+# See: https://supabase.com/docs/guides/cli/local-development#configuring-with-config-toml
+
+[project]
+project_id = "dhz-digital-os"
+
+[db]
+host = "localhost"
+port = 54322
+
+[auth]
+host = "localhost"
+port = 54323
+
+[api]
+host = "localhost"
+port = 54321
+
+[studio]
+host = "localhost"
+port = 54324
+
+[storage]
+host = "localhost"
+port = 54325
+
+[edge_functions]
+host = "localhost"
+port = 54326

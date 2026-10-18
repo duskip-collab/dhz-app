@@ -1,0 +1,152 @@
+"use server";
+
+// Financne server actions pre /dashboard/finance.
+// Prijmy/vydavky: insert do `public.finance_transactions`.
+// Prevody: RPC `public.finance_create_transfer` (obe nohy atomicky).
+
+import { revalidatePath } from "next/cache";
+import { createClient } from "@/lib/supabase/server";
+import type {
+  FinanceTransactionInsert,
+  FinanceCategoriesRow,
+  FinanceAccountsRow,
+} from "@/types/database.types";
+
+// =============================================================================
+// Typy pre server action výsledky
+// =============================================================================
+
+export type FinanceActionState =
+  | { ok: true; data?: unknown; transferGroup?: string }
+  | {
+      ok: false;
+      errors: Record<string, string>;
+      message: string;
+    };
+
+function fail(message: string, errors: Record<string, string> = {}): FinanceActionState {
+  return { ok: false, errors, message };
+}
+
+function failDb(message: string, details?: unknown): FinanceActionState {
+  const d = details && typeof details === "object" ? (details as Record<string, unknown>) : {};
+  const hint =
+    typeof d.hint === "string" ? ` (${d.hint})` : typeof d.details === "string" ? ` (${d.details})` : "";
+  return { ok: false, errors: { base: `${message}${hint}` }, message };
+}
+
+function handleError(e: unknown, fallback: string): FinanceActionState {
+  // Status 400 = validačná chyba z triggerov/backendu
+  const status = (e as { statusCode?: number }).statusCode ?? 500;
+  if (status === 400) return failDb(fallback, e);
+  if (status === 403) return fail("Nemáte oprávnenie k provedení akcie.");
+  if (status === 404) return fail("Záznam sa nenašiel.");
+  return failDb(fallback, e);
+}
+
+// =============================================================================
+// Responzívne celé
+// =============================================================================
+
+const REVALIDATE_PATHS = ["/dashboard/finance", "/dashboard/finance/transactions"];
+
+function revalidateFinance(): void {
+  for (const p of REVALIDATE_PATHS) revalidatePath(p);
+}
+
+export async function loadFinanceAccounts(): Promise<FinanceAccountsRow[]> {
+  const supabase = await createClient();
+  const res = await supabase
+    .from("finance_accounts")
+    .select("*")
+    .eq("is_active", true)
+    .order("name", { ascending: true });
+
+  if (res.error) throw res.error;
+  return (res.data ?? []) as FinanceAccountsRow[];
+}
+
+export async function loadActiveCategories(): Promise<FinanceCategoriesRow[]> {
+  const supabase = await createClient();
+  const res = await supabase
+    .from("finance_categories")
+    .select("*")
+    .eq("is_active", true)
+    .order("sort_order", { ascending: true });
+
+  if (res.error) throw res.error;
+  return (res.data ?? []) as FinanceCategoriesRow[];
+}
+
+// =============================================================================
+// CREATE – príjmy / výdavky (DRAFT/POSTED)
+// =============================================================================
+
+export async function createTransactionAction(
+  _prev: FinanceActionState | null,
+  data: FinanceTransactionInsert,
+): Promise<FinanceActionState> {
+  try {
+    const supabase = await createClient();
+    const res = await supabase
+      .from("finance_transactions")
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .insert(data as any)
+      .select()
+      .single();
+
+    if (res.error) throw res.error;
+    revalidateFinance();
+    return { ok: true, data: res.data };
+  } catch (e) {
+    return handleError(e, "Chyba pri ukladaní transakcie.");
+  }
+}
+
+// =============================================================================
+// CREATE – prevod medzi uctami (RPC public.finance_create_transfer)
+// Vracia transfer_group_id (uuid ako string).
+// =============================================================================
+
+export async function createTransferAction(
+  data: {
+    fromAccountId: string;
+    toAccountId: string;
+    amountMinor: number;
+    transactionDate: string;
+    documentNumber: string | null;
+    description: string | null;
+    post: boolean;
+  },
+): Promise<FinanceActionState> {
+  try {
+    const supabase = await createClient();
+
+    const amountInt = Math.round(Number(data.amountMinor));
+
+    // RPC je v typed clientovi bez Args (custom funkcia) – volame cez any.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const rpc = (supabase.rpc as any).bind(supabase);
+    const { data: groupId, error } = await rpc("finance_create_transfer", {
+      p_from_account_id: data.fromAccountId,
+      p_to_account_id: data.toAccountId,
+      p_amount_minor: amountInt,
+      p_transaction_date: data.transactionDate,
+      p_description: data.description,
+      p_document_number: data.documentNumber,
+      p_post: data.post,
+    });
+
+    if (error) throw error;
+
+    revalidateFinance();
+    return {
+      ok: true,
+      data: groupId ?? null,
+      transferGroup: groupId ?? undefined,
+    };
+  } catch (e) {
+    return handleError(e, "Chyba pri vytvarani prevodu.");
+  }
+}
+

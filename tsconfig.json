@@ -13,13 +13,17 @@
     "isolatedModules": true,
     "jsx": "react-jsx",
     "incremental": true,
+    // Umožňuje `import ... from "./x.ts"` — potrebné pre built-in Node
+    // test runner (`node --test`), ktorý pri type-stripping vyžaduje explicitnú
+    // príponu. Bezpečné, pretože `noEmit` je zapnutý (TS nikdy nič emituje).
+    "allowImportingTsExtensions": true,
     "plugins": [
       {
         "name": "next"
       }
     ],
     "paths": {
-      "@/*": ["./*"]
+      "@/*": ["./src/*"]
     }
   },
   "include": [
@@ -30,5 +34,5 @@
     ".next/dev/types/**/*.ts",
     "**/*.mts"
   ],
-  "exclude": ["node_modules"]
+  "exclude": ["node_modules", "supabase/functions", "e2e"]
 }

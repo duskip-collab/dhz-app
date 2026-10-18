@@ -1,0 +1,9 @@
+▲ Next.js 16.4.0 (Turbopack)
+- Local:         http://localhost:3999
+- Network:       http://192.168.0.103:3999
+- Environments: .env.local
+✓ Ready in 2.1s
+✓ Running next.config.ts took 224ms
+- Experiments (use with caution):
+  ✓ agentFeedback
+
