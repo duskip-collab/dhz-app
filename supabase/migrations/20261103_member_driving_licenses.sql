@@ -1,15 +1,8 @@
--- K15.2 Phase 3: Member Driving Licenses Table
+-- ============================================================================
+-- Migration: member_driving_licenses — Vodičské preukazy členov
 -- Date: 2026-10-18
--- Purpose: Track driver's licenses (categories, expiry dates, countries)
--- Idempotent: Uses IF NOT EXISTS guards for safe re-execution
-
--- Create enum for license categories (optional - can use VARCHAR instead)
--- DO $$
--- BEGIN
---   IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'license_category') THEN
---     CREATE TYPE license_category AS ENUM ('A', 'B', 'C', 'D', 'AM', 'A1', 'A2', 'B1', 'C1', 'D1');
---   END IF;
--- END $$;
+-- Status: K15.2 Phase 3 — Member Driving Licenses Table
+-- ============================================================================
 
 -- Main table: member_driving_licenses
 CREATE TABLE IF NOT EXISTS public.member_driving_licenses (
@@ -20,7 +13,7 @@ CREATE TABLE IF NOT EXISTS public.member_driving_licenses (
   expiry_date DATE,                                 -- When license expires (NULL = no expiry/unknown)
   country_code VARCHAR(2) NOT NULL,                 -- CZ, SK, DE, AT, etc. (ISO 3166-1 alpha-2)
   license_number VARCHAR(50) NOT NULL UNIQUE,       -- Unique identifier on physical license
-  authority VARCHAR(255),                           -- Issuing authority (e.g., "SPŠ Banská Bystrica")
+  authority VARCHAR(255),                           -- Issuing authority (e.g., "OR PZ Trnava")
   notes TEXT,                                       -- Additional notes or restrictions
   created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
   created_by UUID REFERENCES auth.users(id) ON DELETE SET NULL,
@@ -29,8 +22,6 @@ CREATE TABLE IF NOT EXISTS public.member_driving_licenses (
 );
 
 -- Unique constraint: Member can have at most 1 license per category per country
--- (member_id=123, category=B, country_code=SK should be unique)
--- Note: This allows multiple entries if any column is NULL, which is acceptable
 DO $$
 BEGIN
   IF NOT EXISTS (
@@ -60,7 +51,6 @@ CREATE INDEX IF NOT EXISTS idx_member_driving_licenses_license_number
 ALTER TABLE public.member_driving_licenses ENABLE ROW LEVEL SECURITY;
 
 -- RLS Policy: SELECT - All authenticated users can view member licenses
--- (Assumption: viewing license info of other members is allowed for admins/trainers)
 DO $$
 BEGIN
   IF NOT EXISTS (
@@ -76,8 +66,7 @@ BEGIN
   END IF;
 END $$;
 
--- RLS Policy: INSERT - Users with MEMBERS_EDIT role or admin roles
--- Roles: ADMIN, VEDENIE, VELITEL, TRENER (all can manage member data)
+-- RLS Policy: INSERT - Users with edit roles or admin roles
 DO $$
 BEGIN
   IF NOT EXISTS (
@@ -100,7 +89,7 @@ BEGIN
   END IF;
 END $$;
 
--- RLS Policy: UPDATE - Users with MEMBERS_EDIT role or admin roles
+-- RLS Policy: UPDATE - Users with edit roles or admin roles
 DO $$
 BEGIN
   IF NOT EXISTS (
@@ -154,24 +143,17 @@ BEGIN
   END IF;
 END $$;
 
--- Grant permissions to authenticated users and service_role
+-- Grant permissions
 DO $$
 BEGIN
-  -- Authenticated users: SELECT, INSERT, UPDATE (controlled by RLS)
   EXECUTE 'GRANT SELECT, INSERT, UPDATE ON public.member_driving_licenses TO authenticated';
-  
-  -- Service role: Full access (used by trusted backend code)
   EXECUTE 'GRANT ALL ON public.member_driving_licenses TO service_role';
-  
-  -- Add execute permissions on sequence for auto-increment if present
   EXECUTE 'GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO authenticated, service_role';
-  
-  EXCEPTION WHEN OTHERS THEN
-    -- Permissions may already exist
-    NULL;
+EXCEPTION WHEN OTHERS THEN
+  NULL;
 END $$;
 
--- Optional: Trigger to auto-update updated_at timestamp
+-- Trigger: auto-update updated_at timestamp
 CREATE OR REPLACE FUNCTION update_member_driving_licenses_updated_at()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -188,7 +170,7 @@ CREATE TRIGGER trigger_member_driving_licenses_updated_at
   FOR EACH ROW
   EXECUTE FUNCTION update_member_driving_licenses_updated_at();
 
--- Optional: Trigger to auto-set updated_by to current user
+-- Trigger: auto-set updated_by
 CREATE OR REPLACE FUNCTION update_member_driving_licenses_updated_by()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -205,7 +187,7 @@ CREATE TRIGGER trigger_member_driving_licenses_updated_by
   FOR EACH ROW
   EXECUTE FUNCTION update_member_driving_licenses_updated_by();
 
--- Optional: Trigger to auto-set created_by to current user on INSERT
+-- Trigger: auto-set created_by
 CREATE OR REPLACE FUNCTION set_member_driving_licenses_created_by()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -224,14 +206,15 @@ CREATE TRIGGER trigger_member_driving_licenses_created_by
   FOR EACH ROW
   EXECUTE FUNCTION set_member_driving_licenses_created_by();
 
--- Audit Log Entry (if audit_log table exists)
+-- Audit Log Entry (Safe insert wrapper)
 DO $$
 BEGIN
   IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'audit_log') THEN
-    INSERT INTO public.audit_log (action, table_name, details, created_at)
-    VALUES ('MIGRATION', 'member_driving_licenses', 'Created member_driving_licenses table', now())
-    ON CONFLICT DO NOTHING;
+    BEGIN
+      INSERT INTO public.audit_log (action, table_name, details, created_at)
+      VALUES ('MIGRATION', 'member_driving_licenses', 'Created member_driving_licenses table', now());
+    EXCEPTION WHEN OTHERS THEN
+      NULL;
+    END;
   END IF;
 END $$;
-
-COMMIT;

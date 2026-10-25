@@ -1,0 +1,86 @@
+"use client";
+
+import { useActionState, useRef, useState } from "react";
+import { Camera, Loader2, ImagePlus } from "lucide-react";
+import type { EquipmentActionState } from "@/app/(app)/inventory/actions";
+
+/**
+ * EquipmentPhotoUpload – nahrá fotografiu položky inventára.
+ * Podporuje výber súboru z PC aj priame odfotenie mobilom
+ * (accept="image/*" capture="environment").
+ */
+export function EquipmentPhotoUpload({
+  action,
+  currentPhotoUrl,
+}: {
+  action: (prev: EquipmentActionState | null, formData: FormData) => Promise<EquipmentActionState>;
+  currentPhotoUrl: string | null;
+}) {
+  const [state, formAction, pending] = useActionState(action, null);
+  const [preview, setPreview] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const error = !state || state.ok ? undefined : state.errors.photo ?? state.message;
+
+  return (
+    <form action={formAction} className="space-y-3">
+      <div className="flex items-center gap-4">
+        {preview || currentPhotoUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={preview ?? currentPhotoUrl ?? ""}
+            alt="Fotografia položky"
+            className="h-24 w-24 rounded-lg border border-gray-200 object-cover"
+          />
+        ) : (
+          <span className="flex h-24 w-24 items-center justify-center rounded-lg bg-[#C62828]/10 text-[#C62828]">
+            <ImagePlus className="h-9 w-9" />
+          </span>
+        )}
+        <div className="min-w-0 flex-1">
+          <label
+            htmlFor="equipment-photo"
+            className="inline-flex min-h-[44px] cursor-pointer items-center rounded-lg border border-gray-200 px-4 text-sm font-semibold text-gray-700 transition hover:border-red-200 hover:text-[#C62828]"
+          >
+            Vybrať fotografiu
+          </label>
+          <input
+            ref={fileRef}
+            id="equipment-photo"
+            name="photo"
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="sr-only"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) setPreview(URL.createObjectURL(f));
+              else setPreview(null);
+            }}
+          />
+          <p className="mt-1 text-xs text-gray-400">
+            JPG, PNG alebo WebP, max. 5 MB. Na mobile možno odfotiť priamo fotoaparátom.
+          </p>
+        </div>
+      </div>
+      {error ? (
+        <p role="alert" className="text-xs text-[#C62828]">
+          {error}
+        </p>
+      ) : null}
+      {state?.ok ? (
+        <p role="status" className="text-xs text-green-700">
+          Fotografia bola nahraná.
+        </p>
+      ) : null}
+      <button
+        type="submit"
+        disabled={pending}
+        className="inline-flex min-h-[44px] items-center gap-2 rounded-lg bg-gray-900 px-4 text-sm font-semibold text-white transition hover:bg-gray-700 disabled:opacity-50"
+      >
+        {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Camera className="h-4 w-4" />}
+        {pending ? "Nahrávam…" : "Nahrať fotografiu"}
+      </button>
+    </form>
+  );
+}

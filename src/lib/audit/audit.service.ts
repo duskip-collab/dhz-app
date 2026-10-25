@@ -34,6 +34,7 @@ export const AUDIT_ACTIONS = {
   READ: "members:read",
   UPDATE: "members:update",
   ARCHIVE: "members:archive",
+  DELETE: "members:delete",
   LIST: "members:list",
 
   // Member guardians

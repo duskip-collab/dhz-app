@@ -6,24 +6,24 @@ import type {
 } from "@/lib/equipment/equipment.service";
 
 const STATUS_OPTIONS: { value: EquipmentItem["status"]; label: string }[] = [
-  { value: "AVAILABLE", label: "DostupnĂ©" },
-  { value: "IN_SERVICE", label: "V sluĹľbe" },
-  { value: "RESERVED", label: "RezervovanĂ©" },
-  { value: "DAMAGED", label: "PoĹˇkodenĂ©" },
-  { value: "DISPOSED", label: "VyradenĂ©" },
+  { value: "AVAILABLE", label: "Dostupné" },
+  { value: "IN_SERVICE", label: "V službe" },
+  { value: "RESERVED", label: "Rezervované" },
+  { value: "DAMAGED", label: "Poškodené" },
+  { value: "DISPOSED", label: "Vyradené" },
 ];
 
 const CONDITION_OPTIONS: { value: EquipmentItem["condition"]; label: string }[] = [
-  { value: "NEW", label: "NovĂ©" },
-  { value: "GOOD", label: "DobrĂ©" },
-  { value: "FAIR", label: "PouĹľitĂ©" },
-  { value: "POOR", label: "OpotrebovanĂ©" },
-  { value: "UNSERVICEABLE", label: "NeschopnĂ© sluĹľby" },
+  { value: "NEW", label: "Nové" },
+  { value: "GOOD", label: "Dobré" },
+  { value: "FAIR", label: "Použité" },
+  { value: "POOR", label: "Opotrebované" },
+  { value: "UNSERVICEABLE", label: "Neschopné služby" },
 ];
 
 const FUEL_OPTIONS = [
   { value: "DIESEL", label: "Diesel" },
-  { value: "PETROL", label: "BenzĂ­n" },
+  { value: "PETROL", label: "Benzín" },
   { value: "ELECTRIC", label: "Elektrina" },
 ];
 
@@ -31,8 +31,8 @@ const inputCls =
   "w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#C62828] focus:border-[#C62828] bg-white";
 
 /**
- * ZdieÄľanĂ˝ formulĂˇr pre vytvorenie aj Ăşpravu poloĹľky inventĂˇra.
- * Server komponent â€“ akcia je odovzdanĂˇ z parent strĂˇnky.
+ * Zdieľaný formulár pre vytvorenie aj úpravu položky inventára.
+ * Server komponent – akcia je odovzdaná z parent stránky.
  */
 export function GearItemForm({
   categories,
@@ -53,14 +53,14 @@ export function GearItemForm({
       className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-6"
     >
       <div>
-        <h2 className="text-base font-bold text-gray-900 mb-1">ZĂˇkladnĂ© Ăşdaje</h2>
-        <p className="text-sm text-gray-500">PovinnĂ© sĂş len kategĂłria a nĂˇzov.</p>
+        <h2 className="text-base font-bold text-gray-900 mb-1">Základné údaje</h2>
+        <p className="text-sm text-gray-500">Povinné sú len kategória a názov.</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <label htmlFor="category_id" className="block text-sm font-medium text-gray-700 mb-1">
-            KategĂłria *
+            Kategória *
           </label>
           <select
             id="category_id"
@@ -69,7 +69,7 @@ export function GearItemForm({
             defaultValue={item?.category_id ?? ""}
             className={inputCls}
           >
-            <option value="" disabled>Vyberte kategĂłriu</option>
+            <option value="" disabled>Vyberte kategóriu</option>
             {categories.map((cat) => (
               <option key={cat.id} value={cat.id}>{cat.name}</option>
             ))}
@@ -77,7 +77,7 @@ export function GearItemForm({
         </div>
         <div>
           <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">
-            NĂˇzov *
+            Názov *
           </label>
           <input
             id="name"
@@ -90,7 +90,7 @@ export function GearItemForm({
         </div>
         <div>
           <label htmlFor="inventory_number" className="block text-sm font-medium text-gray-700 mb-1">
-            InventĂˇrne ÄŤĂ­slo
+            Inventárne číslo
           </label>
           <input
             id="inventory_number"
@@ -101,7 +101,7 @@ export function GearItemForm({
         </div>
         <div>
           <label htmlFor="serial_number" className="block text-sm font-medium text-gray-700 mb-1">
-            SĂ©riovĂ© ÄŤĂ­slo
+            Sériové číslo
           </label>
           <input
             id="serial_number"
@@ -149,12 +149,12 @@ export function GearItemForm({
             name="location"
             defaultValue={item?.location ?? ""}
             className={inputCls}
-            placeholder="Napr. ZbrojĹa A"
+            placeholder="Napr. Zbrojňa A"
           />
         </div>
         <div>
           <label htmlFor="next_inspection_date" className="block text-sm font-medium text-gray-700 mb-1">
-            ÄŽalĹˇia kontrola
+            Ďalšia kontrola
           </label>
           <input
             id="next_inspection_date"
@@ -166,7 +166,7 @@ export function GearItemForm({
         </div>
         <div>
           <label htmlFor="purchase_date" className="block text-sm font-medium text-gray-700 mb-1">
-            DĂˇtum nĂˇkupu
+            Dátum nákupu
           </label>
           <input
             id="purchase_date"
@@ -178,7 +178,7 @@ export function GearItemForm({
         </div>
         <div>
           <label htmlFor="purchase_price" className="block text-sm font-medium text-gray-700 mb-1">
-            Cena nĂˇkupu (â‚¬)
+            Cena nákupu (€)
           </label>
           <input
             id="purchase_price"
@@ -190,11 +190,35 @@ export function GearItemForm({
             className={inputCls}
           />
         </div>
+        <div>
+          <label htmlFor="quantity" className="block text-sm font-medium text-gray-700 mb-1">
+            Počet kusov
+          </label>
+          <input
+            id="quantity"
+            name="quantity"
+            type="number"
+            min="0"
+            step="1"
+            defaultValue={item?.quantity ?? 1}
+            className={inputCls}
+          />
+        </div>
       </div>
+
+      <label className="flex items-center gap-2 text-sm text-gray-700">
+        <input
+          type="checkbox"
+          name="is_opp"
+          defaultChecked={item?.is_opp ?? false}
+          className="h-5 w-5 rounded border-gray-300 text-[#C62828] focus:ring-[#C62828]"
+        />
+        Osobné ochranné pracovné prostriedky (OOPP) – vedie zoznam pridelených členov
+      </label>
 
       <div>
         <label htmlFor="notes" className="block text-sm font-medium text-gray-700 mb-1">
-          PoznĂˇmky
+          Poznámky
         </label>
         <textarea
           id="notes"
@@ -202,19 +226,19 @@ export function GearItemForm({
           rows={3}
           defaultValue={item?.notes ?? ""}
           className={inputCls}
-          placeholder="VoliteÄľnĂ© poznĂˇmkyâ€¦"
+          placeholder="Voliteľné poznámky…"
         />
       </div>
 
       <div className="border-t border-gray-100 pt-5">
-        <h2 className="text-base font-bold text-gray-900 mb-1">Ăšdaje vozidla</h2>
+        <h2 className="text-base font-bold text-gray-900 mb-1">Údaje vozidla</h2>
         <p className="text-sm text-gray-500 mb-4">
-          VypÄşĹajte len pri poloĹľkĂˇch, ktorĂ© sĂş vozidlom (CAS, PA, prĂ­vesâ€¦).
+          Vypĺňajte len pri položkách, ktoré sú vozidlom (CAS, PA, príves…).
         </p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label htmlFor="license_plate" className="block text-sm font-medium text-gray-700 mb-1">
-              SPZ / EÄŚV
+              SPZ / EČV
             </label>
             <input
               id="license_plate"
@@ -239,7 +263,7 @@ export function GearItemForm({
               defaultValue={vehicle?.fuel_type ?? ""}
               className={inputCls}
             >
-              <option value="">â€”</option>
+              <option value="">—</option>
               {FUEL_OPTIONS.map((opt) => (
                 <option key={opt.value} value={opt.value}>{opt.label}</option>
               ))}
@@ -275,7 +299,7 @@ export function GearItemForm({
           </div>
           <div>
             <label htmlFor="stk_valid_until" className="block text-sm font-medium text-gray-700 mb-1">
-              STK platnĂˇ do
+              STK platná do
             </label>
             <input
               id="stk_valid_until"
@@ -287,7 +311,7 @@ export function GearItemForm({
           </div>
           <div>
             <label htmlFor="ek_valid_until" className="block text-sm font-medium text-gray-700 mb-1">
-              EK platnĂˇ do
+              EK platná do
             </label>
             <input
               id="ek_valid_until"

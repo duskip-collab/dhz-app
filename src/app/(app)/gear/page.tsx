@@ -6,6 +6,7 @@ import {
   getCategories,
   getEquipmentItems,
   getExpiringEquipment,
+  getInventoryAvailability,
   type EquipmentItem,
   type EquipmentCategory,
 } from "@/lib/equipment/equipment.service";
@@ -50,10 +51,11 @@ export default async function GearPage({
   const status = str(params.status);
   const search = str(params.q);
 
-  const [categories, items, expiring] = await Promise.all([
+  const [categories, items, expiring, availability] = await Promise.all([
     getCategories(),
     getEquipmentItems({ category_id: categoryId, status: status as never, search }),
     getExpiringEquipment(30),
+    getInventoryAvailability(),
   ]);
 
   const canEdit = hasPermission(ctx.permissions, PERMISSIONS.INVENTORY_EDIT);
@@ -177,6 +179,7 @@ export default async function GearPage({
                 <th scope="col" className="px-4 py-3 font-semibold">Umiestnenie</th>
                 <th scope="col" className="px-4 py-3 font-semibold">Stav</th>
                 <th scope="col" className="px-4 py-3 font-semibold">Opotreb.</th>
+                <th scope="col" className="px-4 py-3 font-semibold">Kusy</th>
               </tr>
             </thead>
             <tbody>
@@ -205,6 +208,22 @@ export default async function GearPage({
                     </td>
                     <td className="px-4 py-3 text-gray-600">
                       {CONDITION_LABELS[item.condition] ?? item.condition}
+                    </td>
+                    <td className="px-4 py-3 text-gray-600">
+                      {(() => {
+                        const av = availability[item.id];
+                        const total = av?.total ?? item.quantity ?? 1;
+                        const available = av?.available ?? total;
+                        const assigned = av?.assigned ?? 0;
+                        return (
+                          <span className="tabular-nums">
+                            {total}
+                            <span className="block text-xs text-gray-400">
+                              {available} dostupných · {assigned} pridelených
+                            </span>
+                          </span>
+                        );
+                      })()}
                     </td>
                   </tr>
                 );

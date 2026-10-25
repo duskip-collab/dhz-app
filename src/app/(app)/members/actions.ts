@@ -1,9 +1,11 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import {
   createMember,
   createMemberGuardian,
+  deleteMember,
   deleteMemberGuardian,
   type MemberGuardian,
   updateMember,
@@ -32,6 +34,12 @@ function field(formData: FormData, name: string): string | null {
   return s.length === 0 ? null : s;
 }
 
+/** Prečítanie checkbox hodnôt (prítomný => "on" / "true"). */
+function boolField(formData: FormData, name: string): boolean {
+  const raw = formData.get(name);
+  return raw === "on" || raw === "true" || raw === "1";
+}
+
 /** Prečítanie všetkých polí člena z FormData. */
 function memberFields(formData: FormData) {
   return {
@@ -39,6 +47,9 @@ function memberFields(formData: FormData) {
     first_name: field(formData, "first_name"),
     last_name: field(formData, "last_name"),
     title: field(formData, "title"),
+    rank: field(formData, "rank"),
+    position: field(formData, "position"),
+    is_committee_member: boolField(formData, "is_committee_member"),
     phone: field(formData, "phone"),
     email: field(formData, "email"),
     birth_date: field(formData, "birth_date"),
@@ -344,5 +355,38 @@ export async function uploadMemberPhotoAction(
       return { ok: false, errors: {}, message: "Nemáte oprávnenie." };
     }
     return { ok: false, errors: {}, message: "Nahrávanie zlyhalo." };
+  }
+}
+
+// =============================================================================
+// DELETE MEMBER – trvalé vymazanie člena (vyžaduje members.delete).
+// Používa sa cez potvrdzovací modál na detaile člena.
+// =============================================================================
+
+export async function deleteMemberAction(formData: FormData): Promise<void> {
+  const memberId = String(formData.get("member_id") ?? "");
+  if (!memberId) {
+    const params = new URLSearchParams({ error: "Chýba identifikátor člena." });
+    redirect(`/members?${params.toString()}`);
+  }
+
+  try {
+    await deleteMember(memberId);
+    revalidatePath("/members");
+    const params = new URLSearchParams({ success: "Člen bol trvale vymazaný." });
+    redirect(`/members?${params.toString()}`);
+  } catch (e) {
+    if (typeof e === "object" && e !== null && "digest" in e) throw e;
+    const status = (e as { statusCode?: number }).statusCode ?? 500;
+    const message =
+      status === 403
+        ? "Nemáte oprávnenie members.delete."
+        : status === 404
+          ? "Člen sa nenašiel."
+          : e instanceof Error && e.message
+            ? e.message
+            : "Chyba pri vymazávaní člena.";
+    const params = new URLSearchParams({ error: message });
+    redirect(`/members?${params.toString()}`);
   }
 }

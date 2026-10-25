@@ -2,10 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useSyncExternalStore } from "react";
 import { Flame, LogOut } from "lucide-react";
 import { NAV_SECTIONS, filterNavByPermissions } from "@/config/navigation";
 import { Avatar } from "@/components/ui/Avatar";
+
+const subscribeToHydration = () => () => {};
+const getHydrationSnapshot = () => true;
+const getServerHydrationSnapshot = () => false;
 
 export function Sidebar({
   permissions,
@@ -19,12 +23,12 @@ export function Sidebar({
   onLogout: () => void;
 }) {
   const pathname = usePathname();
-  const [isMounted, setIsMounted] = useState(false);
+  const isHydrated = useSyncExternalStore(
+    subscribeToHydration,
+    getHydrationSnapshot,
+    getServerHydrationSnapshot,
+  );
   const sections = filterNavByPermissions(NAV_SECTIONS, permissions);
-
-  useEffect(() => {
-    setIsMounted(true);
-  }, []);
 
   return (
     <aside className="hidden lg:flex w-72 shrink-0 flex-col bg-white border-r border-gray-200 h-screen sticky top-0">
@@ -45,9 +49,8 @@ export function Sidebar({
               {section.label}
             </p>
             <ul className="space-y-1">
-              {section.items.map((item) => {
-                // isActive je false počas SSR a prvotného renderu klienta (zabezpečuje zhodu)
-                const isActive = isMounted && (pathname === item.href || pathname.startsWith(item.href + "/"));
+            {section.items.map((item) => {
+              const isActive = isHydrated && (pathname === item.href || pathname.startsWith(item.href + "/"));
                 const Icon = item.icon;
                 return (
                   <li key={item.href}>

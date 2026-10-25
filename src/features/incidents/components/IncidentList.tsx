@@ -51,7 +51,7 @@ export function IncidentList({ incidents }: { incidents: Incident[] }) {
                 <td className="px-4 py-3"><StatusBadge status={inc.status} /></td>
                 <td className="px-4 py-3 text-right">
                   <Link
-                    href={`/dashboard/incidents/${inc.id}`}
+                    href={`/incidents/${inc.id}`}
                     className="inline-flex min-h-[36px] items-center rounded-lg border border-gray-200 px-3 text-sm font-semibold text-[#C62828] transition hover:border-red-200 hover:bg-red-50/50"
                   >
                     Detail
@@ -82,7 +82,7 @@ export function IncidentList({ incidents }: { incidents: Incident[] }) {
             </div>
             <div className="mt-3">
               <Link
-                href={`/dashboard/incidents/${inc.id}`}
+                href={`/incidents/${inc.id}`}
                 className="inline-flex min-h-[40px] items-center rounded-lg border border-gray-200 px-3 text-sm font-semibold text-[#C62828] transition hover:border-red-200 hover:bg-red-50/50"
               >
                 Detail

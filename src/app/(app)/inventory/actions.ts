@@ -1,12 +1,15 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import {
   createEquipmentItem,
   updateEquipmentItem,
   assignEquipmentToMember,
   returnEquipmentFromMember,
   addMaintenanceLog,
+  deleteEquipmentItem,
+  getEquipmentById,
 } from "@/lib/equipment/equipment.service";
 import {
   isEquipmentStatus,
@@ -35,6 +38,11 @@ function numField(formData: FormData, name: string): number | null {
   if (s.length === 0) return null;
   const n = Number(s);
   return Number.isFinite(n) ? n : null;
+}
+
+function boolField(formData: FormData, name: string): boolean {
+  const raw = formData.get(name);
+  return raw === "on" || raw === "true" || raw === "1";
 }
 
 function fail(message: string, errors: Record<string, string> = {}): EquipmentActionState {
@@ -114,6 +122,8 @@ export async function createEquipmentAction(
     purchase_date: field(formData, "purchase_date"),
     purchase_price: numField(formData, "purchase_price"),
     next_inspection_date: field(formData, "next_inspection_date"),
+    quantity: numField(formData, "quantity") ?? undefined,
+    is_opp: boolField(formData, "is_opp"),
     notes: field(formData, "notes"),
   };
 
@@ -149,6 +159,8 @@ export async function updateEquipmentAction(
   if (formData.has("purchase_date")) input.purchase_date = field(formData, "purchase_date");
   if (formData.has("purchase_price")) input.purchase_price = numField(formData, "purchase_price");
   if (formData.has("next_inspection_date")) input.next_inspection_date = field(formData, "next_inspection_date");
+  if (formData.has("quantity")) input.quantity = numField(formData, "quantity") ?? undefined;
+  if (formData.has("is_opp")) input.is_opp = boolField(formData, "is_opp");
   if (formData.has("notes")) input.notes = field(formData, "notes");
 
   const statusRaw = field(formData, "status");
@@ -268,6 +280,109 @@ export async function addMaintenanceLogAction(
       return fail("Skontrolujte údaje údržby.", detailsFrom(e));
     }
     return handleError(e, "Chyba pri zápise údržby.");
+  }
+}
+
+const PHOTO_BUCKET = "equipment-photos";
+const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
+const ALLOWED_PHOTO_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
+
+/**
+ * uploadEquipmentPhotoAction – nahrá fotografiu položky inventára.
+ * Gate: inventory.edit (kontrola v servise updateEquipmentItem).
+ * Používa sa cez useActionState na detaile položky.
+ */
+export async function uploadEquipmentPhotoAction(
+  equipmentId: string,
+  _prev: EquipmentActionState | null,
+  formData: FormData
+): Promise<EquipmentActionState> {
+  const file = formData.get("photo");
+  if (!(file instanceof File) || file.size === 0) {
+    return fail("Vyberte fotografiu.", { photo: "Vyberte fotografiu." });
+  }
+  if (!ALLOWED_PHOTO_TYPES.has(file.type)) {
+    return fail("Nepodporovaný formát.", { photo: "Povolené sú JPG, PNG, WebP." });
+  }
+  if (file.size > MAX_PHOTO_BYTES) {
+    return fail("Fotografia je príliš veľká.", { photo: "Maximálna veľkosť je 5 MB." });
+  }
+
+  try {
+    const { getAuthContext, hasPermissionServer } = await import("@/lib/auth/server");
+    const { PERMISSIONS } = await import("@/lib/auth/permissions");
+    const { createClient } = await import("@/lib/supabase/server");
+
+    const ctx = await getAuthContext();
+    const ok =
+      ctx.permissions.includes(PERMISSIONS.INVENTORY_EDIT) ||
+      (await hasPermissionServer(ctx.userId, PERMISSIONS.INVENTORY_EDIT));
+    if (!ok) return fail("Nemáte oprávnenie.", {});
+
+    await getEquipmentById(equipmentId);
+
+    const supabase = await createClient();
+    const ext = file.type === "image/png" ? "png" : file.type === "image/webp" ? "webp" : "jpg";
+    const path = `${equipmentId}/${Date.now()}.${ext}`;
+
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const { error: upErr } = await supabase.storage.from(PHOTO_BUCKET).upload(path, bytes, {
+      contentType: file.type,
+      upsert: false,
+    });
+    if (upErr) {
+      return fail("Nahrávanie zlyhalo.", { photo: "Nahrávanie zlyhalo." });
+    }
+
+    await updateEquipmentItem(equipmentId, { photo_path: path } as never, null).catch(async (e) => {
+      // kompenzácia: pri zlyhaní DB zápisu odstránime nahratý objekt
+      await supabase.storage.from(PHOTO_BUCKET).remove([path]);
+      throw e;
+    });
+
+    revalidatePath("/inventory");
+    revalidatePath(`/inventory/${equipmentId}`);
+    revalidatePath("/gear");
+    revalidatePath(`/gear/${equipmentId}`);
+    return { ok: true, equipmentId };
+  } catch (e) {
+    if ((e as { statusCode?: number }).statusCode === 403) {
+      return fail("Nemáte oprávnenie.", {});
+    }
+    return fail("Nahrávanie zlyhalo.", {});
+  }
+}
+
+// =============================================================================
+// DELETE – zmaže položku inventára (vyžaduje inventory.manage v službe)
+// =============================================================================
+
+export async function deleteInventoryItemAction(formData: FormData): Promise<void> {
+  const equipmentId = field(formData, "equipment_id");
+  if (!equipmentId) {
+    const params = new URLSearchParams({ error: "Chýba identifikátor položky." });
+    redirect(`/inventory?${params.toString()}`);
+  }
+
+  try {
+    await deleteEquipmentItem(equipmentId);
+    revalidatePath("/inventory");
+    revalidatePath(`/inventory/${equipmentId}`);
+    const params = new URLSearchParams({ success: "Položka inventára bola vymazaná." });
+    redirect(`/inventory?${params.toString()}`);
+  } catch (e) {
+    if (typeof e === "object" && e !== null && "digest" in e) throw e;
+    const status = (e as { statusCode?: number }).statusCode ?? 500;
+    const message =
+      status === 403
+        ? "Nemáte oprávnenie inventory.manage."
+        : status === 404
+          ? "Položka sa nenašla."
+          : e instanceof Error && e.message
+            ? e.message
+            : "Chyba pri mazaní položky.";
+    const params = new URLSearchParams({ error: message });
+    redirect(`/inventory?${params.toString()}`);
   }
 }
 

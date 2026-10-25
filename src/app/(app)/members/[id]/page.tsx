@@ -1,11 +1,20 @@
-import { ArrowLeft, Briefcase, Calendar, FileText, Heart, Trophy } from "lucide-react";
+import {
+  ArrowLeft,
+  Briefcase,
+  Calendar,
+  FileText,
+  Heart,
+  Trophy,
+  type LucideIcon,
+} from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requirePermission } from "@/lib/auth/server";
-import { PERMISSIONS } from "@/lib/auth/permissions";
+import { PERMISSIONS, hasPermission } from "@/lib/auth/permissions";
 import { getMemberById, getMemberPhotoUrl } from "@/lib/members/members.service";
 import { getMemberProfile, getMemberProfileStats } from "@/lib/members/member-profile.service";
 import { MemberProfileContent } from "@/features/members/components/MemberProfilePage";
+import { DeleteMemberButton } from "@/features/members/components/DeleteMemberButton";
 
 export const metadata = {
   title: "Profil člena",
@@ -30,7 +39,9 @@ export default async function MemberProfilePage({
   const { id } = await params;
 
   // Permission check: musí mať oprávnenie čítať členov
-  await requirePermission(PERMISSIONS.MEMBERS_VIEW);
+  const ctx = await requirePermission(PERMISSIONS.MEMBERS_VIEW);
+  const canEdit = hasPermission(ctx.permissions, PERMISSIONS.MEMBERS_EDIT);
+  const canDelete = hasPermission(ctx.permissions, PERMISSIONS.MEMBERS_DELETE);
 
   // Načítaj kompletný profil
   let profile;
@@ -92,6 +103,18 @@ export default async function MemberProfilePage({
                 {profile.member.title ? `${profile.member.title} ` : ""}
                 {profile.member.first_name} {profile.member.last_name}
               </h1>
+              {(profile.member.rank || profile.member.position) && (
+                <p className="mt-1 text-sm font-medium text-gray-700">
+                  {profile.member.rank ? `Hodnosť: ${profile.member.rank}` : ""}
+                  {profile.member.rank && profile.member.position ? " · " : ""}
+                  {profile.member.position ? `Zaradenie: ${profile.member.position}` : ""}
+                </p>
+              )}
+              {profile.member.is_committee_member && (
+                <p className="mt-1 inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-800">
+                  Člen výboru DHZ
+                </p>
+              )}
               <p className="mt-1 text-sm text-gray-500">
                 Číslo člena: {profile.member.member_number}
               </p>
@@ -101,15 +124,22 @@ export default async function MemberProfilePage({
             </div>
           </div>
 
-          {/* Akcie – Edit */}
-          {/* TODO: Pridať edit button ak má oprávnenie MEMBERS_EDIT */}
-          <div className="flex gap-2">
-            <Link
-              href={`/members/${id}/edit`}
-              className="inline-flex items-center gap-2 rounded-lg bg-[#C62828] px-4 py-2 text-sm font-medium text-white hover:bg-red-700"
-            >
-              Upraviť profil
-            </Link>
+          {/* Akcie – Edit (iba s oprávnením MEMBERS_EDIT) + Zmazať (MEMBERS_DELETE) */}
+          <div className="flex flex-wrap gap-2">
+            {canEdit && (
+              <Link
+                href={`/members/${id}/edit`}
+                className="inline-flex items-center gap-2 rounded-lg bg-[#C62828] px-4 py-2 text-sm font-medium text-white hover:bg-red-700"
+              >
+                Upraviť profil
+              </Link>
+            )}
+            {canDelete && (
+              <DeleteMemberButton
+                memberId={profile.member.id}
+                memberName={`${profile.member.first_name} ${profile.member.last_name}`}
+              />
+            )}
           </div>
         </div>
       </div>
@@ -124,7 +154,7 @@ export default async function MemberProfilePage({
       </div>
 
       {/* Sekcia: Prehľad */}
-      <MemberProfileContent profile={profile} photoUrl={photoUrl} stats={stats} />
+      <MemberProfileContent profile={profile} photoUrl={photoUrl} stats={stats} canEdit={canEdit} />
     </div>
   );
 }
@@ -141,7 +171,7 @@ function StatCard({
   value,
   suffix,
 }: {
-  icon: any;
+  icon: LucideIcon;
   label: string;
   value: number;
   suffix: string;

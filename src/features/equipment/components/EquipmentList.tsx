@@ -5,6 +5,7 @@ import { PackageX } from "lucide-react";
 import type {
   EquipmentItem,
   EquipmentCategory,
+  InventoryAvailability,
 } from "@/lib/equipment/equipment.service";
 import { StatusBadge, ConditionBadge, expiryClass, formatDate, expiryLabel } from "./EquipmentBadges";
 
@@ -19,9 +20,11 @@ function identifier(item: EquipmentItem): string {
 export function EquipmentList({
   items,
   categories,
+  availability,
 }: {
   items: EquipmentItem[];
   categories: EquipmentCategory[];
+  availability?: Record<string, InventoryAvailability>;
 }) {
   if (items.length === 0) {
     return (
@@ -53,6 +56,7 @@ export function EquipmentList({
               <th scope="col" className="px-4 py-3 font-semibold">Stav</th>
               <th scope="col" className="px-4 py-3 font-semibold">Opotreb.</th>
               <th scope="col" className="px-4 py-3 font-semibold">Najbližší termín</th>
+              <th scope="col" className="px-4 py-3 font-semibold">Kusy</th>
               <th scope="col" className="px-4 py-3 text-right font-semibold">Akcie</th>
             </tr>
           </thead>
@@ -74,6 +78,22 @@ export function EquipmentList({
                   {item.next_inspection_date ? (
                     <span className="block text-xs text-gray-400">{expiryLabel(item.next_inspection_date)}</span>
                   ) : null}
+                </td>
+                <td className="px-4 py-3 text-gray-600">
+                  {(() => {
+                    const av = availability?.[item.id];
+                    const total = av?.total ?? item.quantity ?? 1;
+                    const available = av?.available ?? total;
+                    const assigned = av?.assigned ?? 0;
+                    return (
+                      <span className="tabular-nums">
+                        {total}
+                        <span className="block text-xs text-gray-400">
+                          {available} dostupných · {assigned} pridelených
+                        </span>
+                      </span>
+                    );
+                  })()}
                 </td>
                 <td className="px-4 py-3 text-right">
                   <Link
@@ -104,6 +124,7 @@ export function EquipmentList({
               <ConditionBadge condition={item.condition} />
               <span className="text-xs text-gray-500">Inv: {identifier(item)}</span>
               {item.location ? <span className="text-xs text-gray-500">· {item.location}</span> : null}
+              <span className="text-xs text-gray-500">· {item.quantity ?? 1} ks</span>
             </div>
             {item.next_inspection_date ? (
               <p className={`mt-2 text-xs tabular-nums ${expiryClass(item.next_inspection_date)}`}>

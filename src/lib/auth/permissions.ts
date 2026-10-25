@@ -3,6 +3,7 @@ export const PERMISSIONS = {
   MEMBERS_VIEW: "members.view",
   MEMBERS_CREATE: "members.create",
   MEMBERS_EDIT: "members.edit",
+  MEMBERS_DELETE: "members.delete",
   TRAINING_VIEW: "training.view",
   TRAINING_CREATE: "training.create",
   TRAINING_EDIT: "training.edit",
@@ -77,3 +78,6 @@ export function hasAllPermissions(
 ): boolean {
   return permissions.every((permission) => userPermissions.includes(permission));
 }
+
+
+export const VISIBILITY_PERMISSIONS = Object.values(PERMISSIONS) as readonly Permission[];

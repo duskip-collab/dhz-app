@@ -17,7 +17,7 @@
 DO $preflight$
 BEGIN
     IF to_regclass('public.members') IS NULL THEN
-        RAISE EXCEPTION 'member_courses: public.members neexistuje — najprv aplikujte 20261006';
+        RAISE EXCEPTION 'member_courses: public.members neexistuje — najprv aplikujte predchádzajúce migrácie';
     END IF;
 END;
 $preflight$;
@@ -29,7 +29,7 @@ $preflight$;
 CREATE TABLE IF NOT EXISTS public.member_courses (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     
-    -- Cudzi kluč k členom
+    -- Cudzí kľúč k členom
     member_id uuid NOT NULL
         REFERENCES public.members(id) ON DELETE CASCADE,
     
@@ -37,8 +37,8 @@ CREATE TABLE IF NOT EXISTS public.member_courses (
     course_name text NOT NULL,
     
     -- Dátumy
-    certification_date date,           -- Kedy bol kurz ukončený
-    expiry_date date,                  -- Kedy vypršiava validita (nullable pre bez termínu)
+    certification_date date,             -- Kedy bol kurz ukončený
+    expiry_date date,                    -- Kedy vypršiava validita (nullable pre bez termínu)
     
     -- Informácie o vydavateľovi/poskytovateľovi
     issuing_authority text,            -- Inštitúcia, ktorá vydala certifikát
@@ -47,16 +47,16 @@ CREATE TABLE IF NOT EXISTS public.member_courses (
     -- Poznámky
     notes text,
     
-    -- Audit columns
+    -- Audit columns (opravený odkaz na auth.users namiesto public.auth.users)
     created_at timestamptz NOT NULL DEFAULT now(),
     created_by uuid
-        REFERENCES public.auth.users(id) ON DELETE SET NULL,
+        REFERENCES auth.users(id) ON DELETE SET NULL,
     
     updated_at timestamptz NOT NULL DEFAULT now(),
     updated_by uuid
-        REFERENCES public.auth.users(id) ON DELETE SET NULL,
+        REFERENCES auth.users(id) ON DELETE SET NULL,
     
-    -- Zachytáva kombinácii (člen + kurz + dátum) — zabráni duplikovaniu
+    -- Zachytáva kombináciu (člen + kurz + dátum) — zabráni duplikovaniu
     UNIQUE(member_id, course_name, certification_date)
 );
 
@@ -84,14 +84,14 @@ ALTER TABLE public.member_courses ENABLE ROW LEVEL SECURITY;
 -- 4. RLS POLICIES
 -- ============================================================================
 
--- SELECT: Všetci autentifikovaní užívatelia môžu čítať (MEMBERS_VIEW)
+-- SELECT: Všetci autentifikovaní užívatelia môžu čítať
 DROP POLICY IF EXISTS member_courses_select_authenticated
     ON public.member_courses;
 CREATE POLICY member_courses_select_authenticated
     ON public.member_courses FOR SELECT TO authenticated
     USING (true);
 
--- INSERT: Iba MEMBERS_EDIT (alebo ADMIN)
+-- INSERT: Iba oprávnené role (ADMIN, VEDENIE, VELITEL, TRENER)
 DROP POLICY IF EXISTS member_courses_insert_authorized
     ON public.member_courses;
 CREATE POLICY member_courses_insert_authorized
@@ -105,7 +105,7 @@ CREATE POLICY member_courses_insert_authorized
         )
     );
 
--- UPDATE: Iba MEMBERS_EDIT (alebo ADMIN)
+-- UPDATE: Iba oprávnené role
 DROP POLICY IF EXISTS member_courses_update_authorized
     ON public.member_courses;
 CREATE POLICY member_courses_update_authorized
@@ -149,45 +149,6 @@ REVOKE ALL ON TABLE public.member_courses FROM public, anon;
 GRANT SELECT, INSERT, UPDATE ON TABLE public.member_courses TO authenticated;
 GRANT ALL ON TABLE public.member_courses TO service_role;
 
--- Práva na sequence (pre auto-ID)
+-- Práva na sekvencie
 GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO authenticated;
 GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO service_role;
-
--- ============================================================================
--- 6. VERIFICATION QUERIES (spúšťa DBA na DEV)
--- ============================================================================
-
--- Po aplikácii skontroluj:
--- 
--- SELECT column_name, data_type FROM information_schema.columns
---  WHERE table_schema='public' AND table_name='member_courses'
---  ORDER BY ordinal_position;
--- 
--- Expected columns:
---   id, member_id, course_name, certification_date, expiry_date,
---   issuing_authority, certificate_number, notes,
---   created_at, created_by, updated_at, updated_by
--- 
--- SELECT schemaname, tablename FROM pg_tables
---  WHERE tablename = 'member_courses';
--- 
--- Expected: "public" | "member_courses"
--- 
--- SELECT tablename, indexname FROM pg_indexes
---  WHERE tablename = 'member_courses';
--- 
--- Expected indexes:
---   idx_member_courses_member_id
---   idx_member_courses_expiry_date
---   idx_member_courses_created_at
--- 
--- SELECT table_name, policy_name FROM pg_policy
---  WHERE table_name = 'member_courses' ORDER BY policy_name;
--- 
--- Expected policies:
---   member_courses_delete_admin
---   member_courses_insert_authorized
---   member_courses_select_authenticated
---   member_courses_update_authorized
---
--- ============================================================================

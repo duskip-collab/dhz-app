@@ -137,6 +137,20 @@ export function EquipmentForm({
         </Field>
       </div>
 
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Field label="Počet kusov" name="quantity" error={errors.quantity}>
+          <input id="quantity" name="quantity" type="number" min="0" step="1" defaultValue={1} className={inputCls} />
+        </Field>
+        <label className="inline-flex cursor-pointer items-end gap-2 pb-3 text-sm text-gray-700">
+          <input
+            type="checkbox"
+            name="is_opp"
+            className="h-5 w-5 rounded border-gray-300 text-[#C62828] focus:ring-[#C62828]"
+          />
+          OOPP (osobný ochranný pracovný prostriedok)
+        </label>
+      </div>
+
 
       {/* Prepínacie pole pre motorové vozidlo / príves */}
       <div className="rounded-xl border border-gray-200 p-4">

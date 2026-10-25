@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import {
   getIncidents,
   getIncidentById,
@@ -21,11 +22,11 @@ export type IncidentActionState =
   | { ok: false; errors: Record<string, string>; message: string };
 
 // Revalidácia ciest modulu (prehľad + detail).
-const REVALIDATE_PATHS = ["/dashboard/incidents"];
+const REVALIDATE_PATHS = ["/incidents"];
 
 function revalidateIncidents(incidentId?: string): void {
   for (const p of REVALIDATE_PATHS) revalidatePath(p);
-  if (incidentId) revalidatePath(`/dashboard/incidents/${incidentId}`);
+  if (incidentId) revalidatePath(`/incidents/${incidentId}`);
 }
 
 function fail(message: string, errors: Record<string, string> = {}): IncidentActionState {
@@ -46,6 +47,16 @@ function handleError(e: unknown, fallback: string): IncidentActionState {
   if (status === 409) return fail(e instanceof Error ? e.message : "Konflikt údajov.");
   if (status === 400) return fail(e instanceof Error ? e.message : "Neplatné údaje.");
   return fail(fallback);
+}
+
+function redirectWithError(path: string, message: string): never {
+  const params = new URLSearchParams({ error: message });
+  redirect(`${path}?${params.toString()}`);
+}
+
+function redirectWithSuccess(path: string, message: string): never {
+  const params = new URLSearchParams({ success: message });
+  redirect(`${path}?${params.toString()}`);
 }
 
 // Načítanie dát pre stránky (server-side, s permission checkom v službe).
@@ -98,12 +109,23 @@ export async function updateIncidentAction(
   }
 }
 
-export async function deleteIncidentAction(incidentId: string): Promise<IncidentActionState> {
+export async function deleteIncidentAction(formData: FormData): Promise<void> {
+  const incidentId = String(formData.get("incidentId") ?? "");
+  if (!incidentId) {
+    redirectWithError("/incidents", "Chýba identifikátor zásahu.");
+  }
   try {
     await deleteIncident(incidentId);
     revalidateIncidents();
-    return { ok: true, incidentId };
+    redirectWithSuccess("/incidents", "Zásah bol odstránený.");
   } catch (e) {
-    return handleError(e, "Chyba pri odstraňovaní zásahu.");
+    if (typeof e === "object" && e !== null && "digest" in e) throw e;
+    const status = (e as { statusCode?: number }).statusCode ?? 500;
+    if (status === 403) redirectWithError(`/incidents/${incidentId}`, "Nemáte oprávnenie.");
+    if (status === 404) redirectWithError("/incidents", "Zásah sa nenašiel.");
+    redirectWithError(
+      `/incidents/${incidentId}`,
+      e instanceof Error ? e.message : "Chyba pri odstraňovaní zásahu.",
+    );
   }
 }

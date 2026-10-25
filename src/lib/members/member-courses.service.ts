@@ -268,7 +268,7 @@ export async function deleteMemberCourse(courseId: string): Promise<void> {
   );
   
   // Check if has admin-level delete - check if role is admin
-  const isAdmin = ctx.roles && ctx.roles.some((r: any) => r === "ADMIN");
+  const isAdmin = ctx.roles && ctx.roles.some((r: string) => r === "ADMIN");
   
   if (!canEdit && !isAdmin) {
     throw createCourseError(403, "Iba admini alebo oprávnení používatelia môžu mazať kurzy");

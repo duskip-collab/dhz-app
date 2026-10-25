@@ -1,7 +1,8 @@
--- K15.2 Phase 5: Expiry Notifications Table
+-- ============================================================================
+-- Migration: expiry_notifications — Notifikácie exspirácií kurzov, vodičákov a dokumentov
 -- Date: 2026-10-18
--- Purpose: Track expiring courses, driving licenses, and documents
--- Notifications created by background job or on-demand
+-- Status: K15.2 Phase 5 — Expiry Notifications Table & Functions
+-- ============================================================================
 
 CREATE TABLE IF NOT EXISTS public.expiry_notifications (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -13,7 +14,7 @@ CREATE TABLE IF NOT EXISTS public.expiry_notifications (
   expiry_date DATE NOT NULL,                   -- When item expires
   days_until_expiry INTEGER,                   -- Calculated at creation time
   notification_sent_at TIMESTAMP WITH TIME ZONE,  -- When notification was sent (email/dashboard)
-  viewed_at TIMESTAMP WITH TIME ZONE,         -- When user viewed the notification
+  viewed_at TIMESTAMP WITH TIME ZONE,        -- When user viewed the notification
   created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
 );
 
@@ -36,8 +37,7 @@ CREATE INDEX IF NOT EXISTS idx_expiry_notifications_expiry_date
 -- Enable RLS
 ALTER TABLE public.expiry_notifications ENABLE ROW LEVEL SECURITY;
 
--- RLS Policy: SELECT - Users can only view their own notifications
--- Admins can view all notifications
+-- RLS Policy: SELECT - Users can only view their own notifications or Admins can view all
 DO $$
 BEGIN
   IF NOT EXISTS (
@@ -61,8 +61,7 @@ BEGIN
   END IF;
 END $$;
 
--- RLS Policy: INSERT - System/admin only (background job or API endpoint)
--- Service role (backend) can insert
+-- RLS Policy: INSERT - System/admin only
 DO $$
 BEGIN
   IF NOT EXISTS (
@@ -158,7 +157,6 @@ DECLARE
 BEGIN
   cutoff_date := CURRENT_DATE + INTERVAL '30 days';
   
-  -- Find all courses expiring within 30 days without notification sent yet
   FOR course IN
     SELECT mc.id, mc.member_id, mc.course_name, mc.expiry_date,
            m.email, u.id as user_id
@@ -261,14 +259,15 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Audit log
+-- Audit log (Safe wrapped with error handling)
 DO $$
 BEGIN
   IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'audit_log') THEN
-    INSERT INTO public.audit_log (action, table_name, details, created_at)
-    VALUES ('MIGRATION', 'expiry_notifications', 'Created expiry_notifications table and helper functions', now())
-    ON CONFLICT DO NOTHING;
+    BEGIN
+      INSERT INTO public.audit_log (action, details, created_at)
+      VALUES ('MIGRATION_EXPIRY_NOTIFICATIONS', 'Created expiry_notifications table and helper functions', now());
+    EXCEPTION WHEN OTHERS THEN
+      NULL;
+    END;
   END IF;
 END $$;
-
-COMMIT;

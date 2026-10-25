@@ -26,6 +26,9 @@ export function MemberCardList({
                 {m.title ? `${m.title} ` : ""}{m.first_name} {m.last_name}
               </p>
               <p className="truncate text-xs tabular-nums text-gray-400">{m.member_number}</p>
+              {m.position ? (
+                <p className="truncate text-xs font-medium text-[#C62828]">{m.position}</p>
+              ) : null}
               <div className="mt-2 flex flex-wrap items-center gap-2">
                 <MembershipBadge type={m.membership_type} />
                 <MemberStatusBadge status={m.status} />

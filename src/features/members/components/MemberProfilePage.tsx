@@ -2,11 +2,44 @@
 
 import { useState } from 'react';
 import { Calendar, Briefcase, Trophy, Heart, FileText, AlertCircle, CheckCircle, Clock, XCircle, BookOpen, Zap } from 'lucide-react';
-import type { MemberProfile, MemberProfileStats } from '@/lib/members/member-profile.service';
+import type { MemberGuardian } from '@/lib/members/members.service';
+import type {
+  MemberProfile,
+  MemberProfileStats,
+  GearAssignment,
+  TrainingAttendance,
+  CompetitionLineup,
+} from '@/lib/members/member-profile.service';
 import { CoursesTab } from './CoursesTab';
 import DrivingLicensesTab from './DrivingLicensesTab';
 
 type TabId = 'overview' | 'gear' | 'training' | 'competitions' | 'courses' | 'driving_licenses' | 'guardians';
+
+const MEMBERSHIP_TYPE_LABELS: Record<string, string> = {
+  adult: 'Dospelý',
+  youth: 'Mládež',
+  preparatory: 'Prípravka',
+  dorast: 'Dorast',
+};
+
+const CONDITION_LABELS: Record<string, string> = {
+  NEW: 'Nové',
+  GOOD: 'Dobré',
+  FAIR: 'Použité',
+  POOR: 'Opotrebované',
+  UNSERVICEABLE: 'Neschopné služby',
+};
+
+function dateOnly(iso: string | null | undefined): string {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '—';
+  return d.toLocaleDateString('sk-SK', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  });
+}
 
 const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
   { id: 'overview', label: 'Prehľad', icon: <AlertCircle className="h-4 w-4" /> },
@@ -108,7 +141,10 @@ function OverviewTab({
         <h3 className="mb-4 text-lg font-semibold text-gray-900">Základné údaje</h3>
         <div className="space-y-4">
           <DetailRow label="Členský stav" value={member.status === 'active' ? '✓ Aktívny' : '⊗ Neaktívny'} />
-          <DetailRow label="Typ člena" value={member.membership_type || '—'} />
+          <DetailRow label="Typ člena" value={MEMBERSHIP_TYPE_LABELS[member.membership_type] || member.membership_type || '—'} />
+          {member.rank && <DetailRow label="Hodnosť" value={member.rank} />}
+          {member.position && <DetailRow label="Zaradenie v jednotke" value={member.position} />}
+          {member.is_committee_member && <DetailRow label="Člen výboru" value="Áno" />}
           {member.birth_date && (
             <DetailRow
               label="Dátum narodenia"
@@ -156,7 +192,7 @@ function OverviewTab({
 // TAB: VÝSTROJ
 // =============================================================================
 
-function GearTab({ gear }: { gear: any[] }) {
+function GearTab({ gear }: { gear: GearAssignment[] }) {
   if (gear.length === 0) {
     return <EmptyState title="Žiadna výstroj" text="Tomuto členovi nebola pridelená žiadna výstroj." />;
   }
@@ -175,20 +211,26 @@ function GearTab({ gear }: { gear: any[] }) {
           <div className="grid gap-3">
             {active.map((item) => (
               <div key={item.id} className="rounded-lg border border-green-200 bg-green-50 p-4">
-                <div className="flex items-start justify-between">
-                  <div>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
                     <p className="font-medium text-gray-900">{item.equipment.name}</p>
-                    <p className="text-sm text-gray-600">
-                      Evidenčné číslo: {item.equipment.inventory_number}
+                    <p className="mt-1 text-sm text-gray-600">
+                      Evidenčné číslo: {item.equipment.inventory_number || '—'}
+                      {item.equipment.category ? ` • ${item.equipment.category}` : ''}
                     </p>
-                    <p className="text-xs text-gray-500">
-                      Kategória: {item.equipment.category}
+                    <p className="mt-1 text-xs text-gray-500">
+                      Pridelené: {dateOnly(item.assigned_at)}
+                      {item.condition_on_assign
+                        ? ` • Stav pri pridelení: ${
+                            CONDITION_LABELS[item.condition_on_assign] ?? item.condition_on_assign
+                          }`
+                        : ''}
                     </p>
-                    {item.note && (
-                      <p className="mt-2 text-sm text-gray-700">Poznámka: {item.note}</p>
+                    {item.notes && (
+                      <p className="mt-2 text-sm text-gray-700">Poznámka: {item.notes}</p>
                     )}
                   </div>
-                  <span className="rounded-full bg-green-200 px-3 py-1 text-xs font-medium text-green-800">
+                  <span className="shrink-0 rounded-full bg-green-200 px-3 py-1 text-xs font-medium text-green-800">
                     Aktívna
                   </span>
                 </div>
@@ -207,17 +249,19 @@ function GearTab({ gear }: { gear: any[] }) {
           <div className="grid gap-3">
             {returned.map((item) => (
               <div key={item.id} className="rounded-lg border border-gray-200 bg-gray-50 p-4 opacity-75">
-                <div className="flex items-start justify-between">
-                  <div>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
                     <p className="font-medium text-gray-900">{item.equipment.name}</p>
-                    <p className="text-sm text-gray-600">
-                      Evidenčné číslo: {item.equipment.inventory_number}
+                    <p className="mt-1 text-sm text-gray-600">
+                      Evidenčné číslo: {item.equipment.inventory_number || '—'}
+                      {item.equipment.category ? ` • ${item.equipment.category}` : ''}
                     </p>
-                    <p className="text-xs text-gray-500">
-                      Vrátená: {new Date(item.returned_at).toLocaleDateString('sk-SK')}
+                    <p className="mt-1 text-xs text-gray-500">
+                      Pridelené: {dateOnly(item.assigned_at)} → vrátené:{' '}
+                      {dateOnly(item.returned_at)}
                     </p>
                   </div>
-                  <span className="rounded-full bg-gray-200 px-3 py-1 text-xs font-medium text-gray-700">
+                  <span className="shrink-0 rounded-full bg-gray-200 px-3 py-1 text-xs font-medium text-gray-700">
                     Vrátená
                   </span>
                 </div>
@@ -234,7 +278,9 @@ function GearTab({ gear }: { gear: any[] }) {
 // TAB: TRÉNINGY
 // =============================================================================
 
-function TrainingTab({ training }: { training: any[] }) {
+function TrainingTab({
+  training,
+}: { training: TrainingAttendance[] }) {
   if (training.length === 0) {
     return <EmptyState title="Žiadne tréningy" text="Tento člen zatiaľ nie je zaregistrovaný na žiadny tréning." />;
   }
@@ -247,20 +293,20 @@ function TrainingTab({ training }: { training: any[] }) {
       acc[status].push(t);
       return acc;
     },
-    {} as Record<string, any[]>
+    {} as Record<string, TrainingAttendance[]>
   );
 
   return (
     <div className="space-y-6">
       {Object.entries(byStatus).map(([status, itemsArray]) => {
-        const items = itemsArray as any[];
+        const items = itemsArray as TrainingAttendance[];
         return (
           <div key={status}>
             <h3 className="mb-3 text-sm font-semibold text-gray-900">
               {getTrainingStatusLabel(status)} ({items.length})
             </h3>
             <div className="grid gap-3">
-              {items.map((item: any) => (
+              {items.map((item: TrainingAttendance) => (
                 <div key={item.id} className="rounded-lg border border-gray-200 bg-white p-4">
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex-1">
@@ -296,7 +342,9 @@ function TrainingTab({ training }: { training: any[] }) {
 // TAB: SÚŤAŽE
 // =============================================================================
 
-function CompetitionsTab({ competitions }: { competitions: any[] }) {
+function CompetitionsTab({
+  competitions,
+}: { competitions: CompetitionLineup[] }) {
   if (competitions.length === 0) {
     return <EmptyState title="Žiadne súťaže" text="Tento člen sa zatiaľ nezúčastnil žiadnej súťaže." />;
   }
@@ -309,13 +357,13 @@ function CompetitionsTab({ competitions }: { competitions: any[] }) {
       acc[compId].push(c);
       return acc;
     },
-    {} as Record<string, any[]>
+    {} as Record<string, CompetitionLineup[]>
   );
 
   return (
     <div className="space-y-4">
       {Object.entries(byCompetition).map(([, itemsArray]) => {
-        const items = itemsArray as any[];
+        const items = itemsArray as CompetitionLineup[];
         const comp = items[0].team.competition;
         const team = items[0].team;
 
@@ -355,7 +403,7 @@ function CompetitionsTab({ competitions }: { competitions: any[] }) {
 // TAB: OPATROVNÍCI
 // =============================================================================
 
-function GuardiansTab({ guardians }: { guardians: any[] }) {
+function GuardiansTab({ guardians }: { guardians: MemberGuardian[] }) {
   if (guardians.length === 0) {
     return <EmptyState title="Žádní opatrovníci" text="Pre tohto člena nie sú registrovaní žiadni opatrovníci." />;
   }

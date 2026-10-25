@@ -44,7 +44,8 @@ export function MemberPhotoUpload({
             id="member-photo"
             name="photo"
             type="file"
-            accept="image/jpeg,image/png,image/webp"
+            accept="image/*"
+            capture="environment"
             className="sr-only"
             onChange={(e) => {
               const f = e.target.files?.[0];
@@ -52,7 +53,10 @@ export function MemberPhotoUpload({
               else setPreview(null);
             }}
           />
-          <p className="mt-1 text-xs text-gray-400">JPG, PNG alebo WebP, max. 5 MB. Ukladá sa do súkromného úložiska.</p>
+          <p className="mt-1 text-xs text-gray-400">
+            JPG, PNG alebo WebP, max. 5 MB. Na mobile možno odfotiť priamo fotoaparátom.
+            Ukladá sa do súkromného úložiska.
+          </p>
         </div>
       </div>
       {error ? (

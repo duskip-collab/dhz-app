@@ -21,6 +21,9 @@ export interface CreateMemberInput {
   first_name: string;
   last_name: string;
   title?: string | null;
+  rank?: string | null;
+  position?: string | null;
+  is_committee_member?: boolean;
   phone?: string | null;
   email?: string | null;
   birth_date?: string | null;
@@ -35,6 +38,9 @@ export interface UpdateMemberInput {
   first_name?: string;
   last_name?: string;
   title?: string | null;
+  rank?: string | null;
+  position?: string | null;
+  is_committee_member?: boolean;
   phone?: string | null;
   email?: string | null;
   birth_date?: string | null;
@@ -80,6 +86,8 @@ export function validateMemberBase(input: {
   phone?: string | null;
   birth_date?: string | null;
   joined_at?: string;
+  rank?: string | null;
+  position?: string | null;
 }): Record<string, string> {
   const errors: Record<string, string> = {};
 
@@ -117,8 +125,21 @@ export function validateMemberBase(input: {
     errors.joined_at = "Dátum vstupu nie je platný dátum.";
   }
 
+  const rank = trimOrNull(input.rank ?? null);
+  if (rank !== null && rank.length > MAX_ROLE_LENGTH) {
+    errors.rank = `Hodnosť je príliš dlhá (max ${MAX_ROLE_LENGTH} znakov).`;
+  }
+
+  const position = trimOrNull(input.position ?? null);
+  if (position !== null && position.length > MAX_ROLE_LENGTH) {
+    errors.position = `Zaradenie je príliš dlhé (max ${MAX_ROLE_LENGTH} znakov).`;
+  }
+
   return errors;
 }
+
+/** Maximálna dĺžka hodnosti / funkčného zaradenia (znaky). */
+const MAX_ROLE_LENGTH = 100;
 
 export function validateCreateMember(
   input: CreateMemberInput
@@ -228,6 +249,9 @@ export interface MemberFormValues {
   first_name: string;
   last_name: string;
   title: string;
+  rank: string;
+  position: string;
+  is_committee_member: boolean;
   phone: string;
   email: string;
   birth_date: string;
@@ -244,6 +268,9 @@ export interface RawMemberFormFields {
   first_name?: string | null;
   last_name?: string | null;
   title?: string | null;
+  rank?: string | null;
+  position?: string | null;
+  is_committee_member?: boolean;
   phone?: string | null;
   email?: string | null;
   birth_date?: string | null;
@@ -261,6 +288,9 @@ export function memberToFormValues(member: Member): MemberFormValues {
     first_name: member.first_name,
     last_name: member.last_name,
     title: member.title ?? "",
+    rank: member.rank ?? "",
+    position: member.position ?? "",
+    is_committee_member: member.is_committee_member,
     phone: member.phone ?? "",
     email: member.email ?? "",
     birth_date: member.birth_date ? member.birth_date.slice(0, 10) : "",
@@ -281,6 +311,9 @@ export function createMemberInputFromForm(
     first_name: raw.first_name ?? "",
     last_name: raw.last_name ?? "",
     title: raw.title ?? null,
+    rank: raw.rank ?? null,
+    position: raw.position ?? null,
+    is_committee_member: raw.is_committee_member ?? false,
     phone: raw.phone ?? null,
     email: raw.email ?? null,
     birth_date: raw.birth_date ?? null,
@@ -306,6 +339,11 @@ export function updateMemberInputFromForm(
   if (raw.first_name !== undefined) result.first_name = raw.first_name ?? "";
   if (raw.last_name !== undefined) result.last_name = raw.last_name ?? "";
   if (raw.title !== undefined) result.title = raw.title ?? null;
+  if (raw.rank !== undefined) result.rank = raw.rank ?? null;
+  if (raw.position !== undefined) result.position = raw.position ?? null;
+  if (raw.is_committee_member !== undefined) {
+    result.is_committee_member = raw.is_committee_member;
+  }
   if (raw.phone !== undefined) result.phone = raw.phone ?? null;
   if (raw.email !== undefined) result.email = raw.email ?? null;
   if (raw.birth_date !== undefined) result.birth_date = raw.birth_date ?? null;

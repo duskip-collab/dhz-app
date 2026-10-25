@@ -10,9 +10,10 @@ import type {
   IncidentStatus,
   ResponderRole,
   CreateIncidentInput,
+  IncidentWithDetails,
 } from "@/types/incidents";
-import type { IncidentActionState } from "@/app/(app)/dashboard/incidents/actions";
-import { createIncidentAction } from "@/app/(app)/dashboard/incidents/actions";
+import type { IncidentActionState } from "@/app/(app)/incidents/actions";
+import { createIncidentAction, updateIncidentAction } from "@/app/(app)/incidents/actions";
 
 const TYPES: { value: IncidentType; label: string }[] = [
   { value: "FIRE", label: "Požiar" },
@@ -66,10 +67,13 @@ function Field({
 const inputCls =
   "w-full rounded-lg border border-gray-300 px-4 py-3 text-sm outline-none transition placeholder:text-gray-400 focus:border-transparent focus:ring-2 focus:ring-[#C62828] min-h-[44px]";
 
-function nowLocal(): string {
-  const d = new Date();
+function nowLocal(d: Date = new Date()): string {
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function toLocalOrNull(iso: string | null): string {
+  return iso ? nowLocal(new Date(iso)) : "";
 }
 
 interface ResponderRow {
@@ -86,28 +90,45 @@ interface EquipmentRow {
 export function IncidentFormModal({
   members,
   equipment,
+  initialIncident,
   onClose,
   onSuccess,
 }: {
   members: Member[];
   equipment: EquipmentItem[];
+  initialIncident?: IncidentWithDetails;
   onClose: () => void;
   onSuccess?: (id: string) => void;
 }) {
   const router = useRouter();
-  const [title, setTitle] = useState("");
-  const [incidentNumber, setIncidentNumber] = useState("");
-  const [type, setType] = useState<IncidentType>("FIRE");
-  const [status, setStatus] = useState<IncidentStatus>("REPORTED");
-  const [location, setLocation] = useState("");
-  const [gps, setGps] = useState("");
-  const [description, setDescription] = useState("");
-  const [reportedAt, setReportedAt] = useState(nowLocal());
-  const [dispatchedAt, setDispatchedAt] = useState("");
-  const [arrivedAt, setArrivedAt] = useState("");
-  const [returnedAt, setReturnedAt] = useState("");
-  const [responders, setResponders] = useState<ResponderRow[]>([{ member_id: "", role: "COMMANDER" }]);
-  const [equipmentRows, setEquipmentRows] = useState<EquipmentRow[]>([]);
+  const isEdit = !!initialIncident;
+  const [title, setTitle] = useState(initialIncident?.title ?? "");
+  const [incidentNumber, setIncidentNumber] = useState(initialIncident?.incident_number ?? "");
+  const [type, setType] = useState<IncidentType>(initialIncident?.type ?? "FIRE");
+  const [status, setStatus] = useState<IncidentStatus>(initialIncident?.status ?? "REPORTED");
+  const [location, setLocation] = useState(initialIncident?.location ?? "");
+  const [gps, setGps] = useState(initialIncident?.gps_coordinates ?? "");
+  const [description, setDescription] = useState(initialIncident?.description ?? "");
+  const [reportedAt, setReportedAt] = useState(
+    initialIncident ? nowLocal(new Date(initialIncident.reported_at)) : nowLocal(),
+  );
+  const [dispatchedAt, setDispatchedAt] = useState(toLocalOrNull(initialIncident?.dispatched_at ?? null));
+  const [arrivedAt, setArrivedAt] = useState(toLocalOrNull(initialIncident?.arrived_at ?? null));
+  const [returnedAt, setReturnedAt] = useState(toLocalOrNull(initialIncident?.returned_at ?? null));
+  const [responders, setResponders] = useState<ResponderRow[]>(
+    initialIncident && initialIncident.responders.length > 0
+      ? initialIncident.responders.map((r) => ({ member_id: r.member_id, role: r.role }))
+      : [{ member_id: "", role: "COMMANDER" }],
+  );
+  const [equipmentRows, setEquipmentRows] = useState<EquipmentRow[]>(
+    initialIncident
+      ? initialIncident.equipment.map((eq) => ({
+          equipment_id: eq.equipment_id,
+          engine_hours_used: eq.engine_hours_used != null ? String(eq.engine_hours_used) : "",
+          kilometers_driven: eq.kilometers_driven != null ? String(eq.kilometers_driven) : "",
+        }))
+      : [],
+  );
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -160,12 +181,15 @@ export function IncidentFormModal({
     };
 
     try {
-      const result: IncidentActionState = await createIncidentAction(null, payload);
+      const result: IncidentActionState = isEdit
+        ? await updateIncidentAction(initialIncident!.id, null, payload)
+        : await createIncidentAction(null, payload);
       if (result.ok) {
+        const id = result.incidentId ?? initialIncident?.id;
         onClose();
-        router.push(`/dashboard/incidents/${result.incidentId}`);
+        router.push(`/incidents/${id}`);
         router.refresh();
-        onSuccess?.(result.incidentId!);
+        if (id) onSuccess?.(id);
       } else {
         setError(result.message);
       }
@@ -180,7 +204,7 @@ export function IncidentFormModal({
     <div
       role="dialog"
       aria-modal="true"
-      aria-label="Evidovať nový výjazd"
+      aria-label={isEdit ? "Upraviť výjazd" : "Evidovať nový výjazd"}
       className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 py-8"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
@@ -188,7 +212,7 @@ export function IncidentFormModal({
     >
       <div className="w-full max-w-3xl rounded-xl bg-white p-6 shadow-xl">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-bold text-gray-900">Evidovať nový výjazd</h2>
+          <h2 className="text-lg font-bold text-gray-900">{isEdit ? "Upraviť výjazd" : "Evidovať nový výjazd"}</h2>
           <button type="button" onClick={onClose} className="rounded-lg px-3 py-1 text-sm text-gray-500 hover:bg-gray-100">
             Zavrieť
           </button>
@@ -364,7 +388,7 @@ export function IncidentFormModal({
               Zrušiť
             </button>
             <button type="submit" disabled={pending} className="min-h-[44px] rounded-lg bg-[#C62828] px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#8E0000] disabled:opacity-50">
-              {pending ? "Ukladám…" : "Uložiť výjazd"}
+              {pending ? "Ukladám…" : isEdit ? "Uložiť zmeny" : "Uložiť výjazd"}
             </button>
           </div>
         </form>

@@ -41,6 +41,8 @@ export interface EquipmentItemInput {
   purchase_date?: string | null;
   purchase_price?: number | null;
   next_inspection_date?: string | null;
+  quantity?: number;
+  is_opp?: boolean;
   notes?: string | null;
 }
 
@@ -145,6 +147,8 @@ export function validateEquipmentItem(input: EquipmentItemInput): ValidationResu
   purchase_date: string | null;
   purchase_price: number | null;
   next_inspection_date: string | null;
+  quantity: number;
+  is_opp: boolean;
   notes: string | null;
 }> {
   const errors: Record<string, string> = {};
@@ -176,6 +180,11 @@ export function validateEquipmentItem(input: EquipmentItemInput): ValidationResu
     errors.next_inspection_date = "Neplatný dátum kontroly.";
   }
 
+  const quantity = numberOrNull(input.quantity);
+  if (quantity !== null && (!Number.isInteger(quantity) || quantity < 0)) {
+    errors.quantity = "Počet kusov musí byť nezáporné celé číslo.";
+  }
+
   if (Object.keys(errors).length > 0) return { ok: false, errors };
 
   return {
@@ -191,6 +200,8 @@ export function validateEquipmentItem(input: EquipmentItemInput): ValidationResu
       purchase_date: purchaseDate ? purchaseDate.toISOString().slice(0, 10) : null,
       purchase_price: purchasePrice,
       next_inspection_date: nextInspection ? nextInspection.toISOString().slice(0, 10) : null,
+      quantity: quantity ?? 1,
+      is_opp: input.is_opp === true,
       notes: trimOrNull(input.notes ?? null),
     },
   };

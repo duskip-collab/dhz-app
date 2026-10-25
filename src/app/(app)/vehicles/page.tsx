@@ -7,6 +7,13 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 
+const ROLE_SHORT: Record<string, string> = {
+  GARAGE_MASTER: "Garážmajster",
+  MAINTENANCE: "Údržba",
+  MANAGER: "Správca",
+  DRIVER: "Vodič",
+};
+
 function stkTone(validUntil: string | null): "green" | "yellow" | "red" | "gray" {
   if (!validUntil) return "gray";
   const diff = Math.ceil(
@@ -66,11 +73,11 @@ export default async function VehiclesPage({
           {vehicles.map((v) => (
             <div key={v.id} className="border rounded-xl bg-white p-4 shadow-sm">
               <div className="flex justify-between items-start gap-2 mb-2">
-                <h2 className="text-lg font-semibold text-gray-900">
-                  <Link href={`/vehicle-equipment?vehicle=${v.id}`} className="hover:text-[#C62828]">
+                <p className="text-lg font-semibold text-gray-900">
+                  <Link href={`/vehicles/${v.id}`} className="hover:text-[#C62828]">
                     {v.name}
                   </Link>
-                </h2>
+                </p>
                 <Badge tone={v.status === "AVAILABLE" ? "green" : v.status === "DAMAGED" ? "red" : "blue"}>
                   {v.status}
                 </Badge>
@@ -111,16 +118,34 @@ export default async function VehiclesPage({
                   </dd>
                 </div>
               </dl>
-              <div className="mt-3 pt-3 border-t border-gray-100 flex items-center gap-2">
-                <Link
-                  href={`/vehicle-equipment?vehicle=${v.id}`}
-                  className="text-sm text-[#C62828] hover:underline"
-                >
-                  Výzbroj →
-                </Link>
-                <Link href={`/gear/${v.id}`} className="text-sm text-gray-500 hover:text-[#C62828]">
-                  Detail
-                </Link>
+              <div className="mt-3 pt-3 border-t border-gray-100 space-y-2">
+                {v.responsible_members.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {v.responsible_members.map((r) => (
+                      <span
+                        key={r.id}
+                        className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-[#C62828]"
+                        title={`${r.member?.first_name} ${r.member?.last_name}${
+                          r.member?.phone ? ` · Tel: ${r.member.phone}` : ""
+                        }`}
+                      >
+                        {r.member ? `${r.member.first_name} ${r.member.last_name.charAt(0)}.` : "?"}
+                        {(ROLE_SHORT[r.role] ?? r.role) !== "" ? ` · ${ROLE_SHORT[r.role] ?? r.role}` : ""}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                <div className="flex items-center gap-2">
+                  <Link
+                    href={`/vehicles/${v.id}`}
+                    className="text-sm text-[#C62828] hover:underline"
+                  >
+                    Detail vozidla →
+                  </Link>
+                  <Link href={`/gear/${v.id}`} className="text-sm text-gray-500 hover:text-[#C62828]">
+                    Inventár
+                  </Link>
+                </div>
               </div>
             </div>
           ))}

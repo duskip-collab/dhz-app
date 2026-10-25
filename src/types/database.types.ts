@@ -118,6 +118,88 @@ export interface Database {
           created_at?: string;
         }
       >;
+      invitations: Table<
+        {
+          id: string;
+          code_hash: string;
+          role: string;
+          max_uses: number;
+          use_count: number;
+          expires_at: string;
+          created_by: string;
+          target_email: string | null;
+          member_id: string | null;
+          notes: string | null;
+          status: "active" | "consumed" | "revoked" | "expired";
+          created_at: string;
+          updated_at: string;
+        },
+        {
+          id?: string;
+          code_hash: string;
+          role: string;
+          max_uses?: number;
+          use_count?: number;
+          expires_at: string;
+          created_by: string;
+          target_email?: string | null;
+          member_id?: string | null;
+          notes?: string | null;
+          status?: "active" | "consumed" | "revoked" | "expired";
+          created_at?: string;
+          updated_at?: string;
+        },
+        {
+          id?: string;
+          code_hash?: string;
+          role?: string;
+          max_uses?: number;
+          use_count?: number;
+          expires_at?: string;
+          created_by?: string;
+          target_email?: string | null;
+          member_id?: string | null;
+          notes?: string | null;
+          status?: "active" | "consumed" | "revoked" | "expired";
+          created_at?: string;
+          updated_at?: string;
+        },
+        [
+          Relationship<"invitations_created_by_fkey", "created_by", "users", "id">,
+          Relationship<"invitations_member_id_fkey", "member_id", "members", "id">,
+        ]
+      >;
+      invitation_claims: Table<
+        {
+          id: string;
+          invitation_id: string;
+          user_id: string | null;
+          email: string | null;
+          claimed_at: string;
+        },
+        {
+          id?: string;
+          invitation_id: string;
+          user_id?: string | null;
+          email?: string | null;
+          claimed_at?: string;
+        },
+        {
+          id?: string;
+          invitation_id?: string;
+          user_id?: string | null;
+          email?: string | null;
+          claimed_at?: string;
+        },
+        [
+          Relationship<
+            "invitation_claims_invitation_id_fkey",
+            "invitation_id",
+            "invitations",
+            "id"
+          >,
+        ]
+      >;
       members: Table<
         {
           id: string;
@@ -1045,6 +1127,61 @@ export interface Database {
         // Skutočná signatúra v DB (20261006:321): (p_user_id uuid, p_permission_code text)
         Args: { p_user_id: string; p_permission_code: string };
         Returns: boolean;
+      };
+      create_invitation: {
+        // 20261111_invitation_codes.sql: (role_code, code_hash, expires_at, ...)
+        Args: {
+          p_role_code: string;
+          p_code_hash: string;
+          p_expires_at: string;
+          p_target_email?: string | null;
+          p_member_id?: string | null;
+          p_max_uses?: number;
+          p_notes?: string | null;
+        };
+        Returns: string;
+      };
+      verify_invitation_code: {
+        Args: { p_code: string };
+        Returns: {
+          invitation_id: string;
+          role: string;
+          status: string;
+          is_valid: boolean;
+          expires_at: string;
+          use_count: number;
+          max_uses: number;
+        }[];
+      };
+      claim_invitation_code: {
+        Args: { p_code: string; p_user_id: string; p_email: string };
+        Returns: {
+          success: boolean;
+          invitation_id?: string;
+          role?: string;
+          error?: string;
+        };
+      };
+      revoke_invitation: {
+        Args: { p_invitation_id: string };
+        Returns: undefined;
+      };
+      list_invitations: {
+        Args: { p_limit?: number; p_offset?: number };
+        Returns: {
+          id: string;
+          role: string;
+          status: string;
+          use_count: number;
+          max_uses: number;
+          expires_at: string;
+          target_email: string | null;
+          member_id: string | null;
+          notes: string | null;
+          created_at: string;
+          updated_at: string;
+          created_by: string;
+        }[];
       };
       has_role: {
         // Skutočná signatúra v DB (20261006:305): (p_user_id uuid, p_role_code text)

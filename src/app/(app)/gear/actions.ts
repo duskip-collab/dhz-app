@@ -23,7 +23,7 @@ import {
 } from "@/lib/equipment/equipment.validation";
 
 // =============================================================================
-// Pomocna© funkcie
+// Pomocné funkcie
 // =============================================================================
 
 function field(formData: FormData, name: string): string | null {
@@ -87,15 +87,15 @@ function vehicleFrom(formData: FormData): {
 
 
 // =============================================================================
-// POLOĹ˝KY â€“ CREATE / UPDATE / DELETE
+// POLOŽKY – CREATE / UPDATE / DELETE
 // =============================================================================
 
 export async function createGearItemAction(formData: FormData): Promise<void> {
   const statusRaw = field(formData, "status") ?? "AVAILABLE";
-  if (!isEquipmentStatus(statusRaw)) redirectWithError("/gear/new", "Neplatna˝ stav.");
+  if (!isEquipmentStatus(statusRaw)) redirectWithError("/gear/new", "Neplatný stav.");
   const conditionRaw = field(formData, "condition") ?? "GOOD";
   if (!isEquipmentCondition(conditionRaw)) {
-    redirectWithError("/gear/new", "Neplatna˝ stav opotrebovania.");
+    redirectWithError("/gear/new", "Neplatný stav opotrebovania.");
   }
 
   const input = {
@@ -109,11 +109,13 @@ export async function createGearItemAction(formData: FormData): Promise<void> {
     purchase_date: field(formData, "purchase_date"),
     purchase_price: numField(formData, "purchase_price"),
     next_inspection_date: field(formData, "next_inspection_date"),
+    quantity: numField(formData, "quantity") ?? undefined,
+    is_opp: boolField(formData, "is_opp"),
     notes: field(formData, "notes"),
   };
 
   if (!input.category_id || !input.name) {
-    redirectWithError("/gear/new", "Kategałria a naˇzov saş povinna©.");
+    redirectWithError("/gear/new", "Kategória a názov sú povinné.");
   }
 
   try {
@@ -123,7 +125,7 @@ export async function createGearItemAction(formData: FormData): Promise<void> {
   } catch (error) {
     if (typeof error === "object" && error !== null && "digest" in error) throw error;
     const message =
-      error instanceof Error && error.message ? error.message : "Chyba pri vytvaˇrana­ poloĹľky.";
+      error instanceof Error && error.message ? error.message : "Chyba pri vytváraní položky.";
     redirectWithError("/gear/new", message);
   }
 }
@@ -146,17 +148,19 @@ export async function updateGearItemAction(
   if (formData.has("next_inspection_date")) {
     input.next_inspection_date = field(formData, "next_inspection_date");
   }
+  if (formData.has("quantity")) input.quantity = numField(formData, "quantity");
+  if (formData.has("is_opp")) input.is_opp = boolField(formData, "is_opp");
   if (formData.has("notes")) input.notes = field(formData, "notes");
 
   const statusRaw = field(formData, "status");
   if (statusRaw !== null) {
-    if (!isEquipmentStatus(statusRaw)) redirectWithError(backPath, "Neplatna˝ stav.");
+    if (!isEquipmentStatus(statusRaw)) redirectWithError(backPath, "Neplatný stav.");
     input.status = statusRaw as EquipmentStatus;
   }
   const conditionRaw = field(formData, "condition");
   if (conditionRaw !== null) {
     if (!isEquipmentCondition(conditionRaw)) {
-      redirectWithError(backPath, "Neplatna˝ stav opotrebovania.");
+      redirectWithError(backPath, "Neplatný stav opotrebovania.");
     }
     input.condition = conditionRaw as EquipmentCondition;
   }
@@ -169,29 +173,29 @@ export async function updateGearItemAction(
   } catch (error) {
     if (typeof error === "object" && error !== null && "digest" in error) throw error;
     const message =
-      error instanceof Error && error.message ? error.message : "Chyba pri ukladana­ poloĹľky.";
+      error instanceof Error && error.message ? error.message : "Chyba pri ukladaní položky.";
     redirectWithError(backPath, message);
   }
 }
 
 export async function deleteGearItemAction(formData: FormData): Promise<void> {
   const equipmentId = field(formData, "equipment_id");
-  if (!equipmentId) redirectWithError("/gear", "Cha˝ba identifikaˇtor poloĹľky.");
+  if (!equipmentId) redirectWithError("/gear", "Chýba identifikátor položky.");
 
   try {
     await deleteEquipmentItem(equipmentId);
     revalidatePath("/gear");
-    redirectWithSuccess("/gear", "PoloĹľka bola vymazanaˇ.");
+    redirectWithSuccess("/gear", "Položka bola vymazaná.");
   } catch (error) {
     if (typeof error === "object" && error !== null && "digest" in error) throw error;
     const message =
-      error instanceof Error && error.message ? error.message : "Chyba pri mazana­ poloĹľky.";
+      error instanceof Error && error.message ? error.message : "Chyba pri mazaní položky.";
     redirectWithError(`/gear/${equipmentId}`, message);
   }
 }
 
 // =============================================================================
-// PRIRADENIA â€“ ASSIGN / RETURN
+// PRIRADENIA – ASSIGN / RETURN
 // =============================================================================
 
 export async function assignGearAction(formData: FormData): Promise<void> {
@@ -200,7 +204,7 @@ export async function assignGearAction(formData: FormData): Promise<void> {
   const conditionRaw = field(formData, "condition_on_assign");
 
   if (!equipmentId || !memberId) {
-    redirectWithError("/gear/assign", "PoloĹľka aj ÄŤlen saş povinna©.");
+    redirectWithError("/gear/assign", "Položka aj člen sú povinné.");
   }
 
   try {
@@ -212,11 +216,11 @@ export async function assignGearAction(formData: FormData): Promise<void> {
     );
     revalidatePath("/gear");
     revalidatePath(`/gear/${equipmentId}`);
-    redirectWithSuccess("/gear/assignments", "Technika bola priradenaˇ.");
+    redirectWithSuccess("/gear/assignments", "Technika bola priradená.");
   } catch (error) {
     if (typeof error === "object" && error !== null && "digest" in error) throw error;
     const message =
-      error instanceof Error && error.message ? error.message : "Chyba pri priradena­ techniky.";
+      error instanceof Error && error.message ? error.message : "Chyba pri priradení techniky.";
     redirectWithError("/gear/assign", message);
   }
 }
@@ -226,7 +230,7 @@ export async function returnGearAction(formData: FormData): Promise<void> {
   const equipmentId = field(formData, "equipment_id");
   const conditionRaw = field(formData, "condition_on_return");
 
-  if (!assignmentId) redirectWithError("/gear/assignments", "Cha˝ba identifikaˇtor va˝daja.");
+  if (!assignmentId) redirectWithError("/gear/assignments", "Chýba identifikátor výdaja.");
 
   try {
     await returnEquipmentFromMember(
@@ -236,17 +240,17 @@ export async function returnGearAction(formData: FormData): Promise<void> {
     );
     revalidatePath("/gear");
     if (equipmentId) revalidatePath(`/gear/${equipmentId}`);
-    redirectWithSuccess("/gear/assignments", "Technika bola vraˇtenaˇ.");
+    redirectWithSuccess("/gear/assignments", "Technika bola vrátená.");
   } catch (error) {
     if (typeof error === "object" && error !== null && "digest" in error) throw error;
     const message =
-      error instanceof Error && error.message ? error.message : "Chyba pri naˇvrate techniky.";
+      error instanceof Error && error.message ? error.message : "Chyba pri návrate techniky.";
     redirectWithError("/gear/assignments", message);
   }
 }
 
 // =============================================================================
-// ašDRĹ˝BA â€“ ADD LOG
+// ÚDRŽBA – ADD LOG
 // =============================================================================
 
 export async function addMaintenanceLogAction(formData: FormData): Promise<void> {
@@ -254,7 +258,7 @@ export async function addMaintenanceLogAction(formData: FormData): Promise<void>
   const backPath = equipmentId ? `/gear/${equipmentId}/maintenance` : "/gear";
 
   const typeRaw = field(formData, "type") ?? "";
-  if (!isMaintenanceType(typeRaw)) redirectWithError(backPath, "Neplatna˝ typ aşdrĹľby.");
+  if (!isMaintenanceType(typeRaw)) redirectWithError(backPath, "Neplatný typ údržby.");
 
   const input = {
     type: typeRaw as MaintenanceType,
@@ -267,9 +271,9 @@ export async function addMaintenanceLogAction(formData: FormData): Promise<void>
     status: (field(formData, "status") ?? "COMPLETED") as "PLANNED" | "COMPLETED",
   };
 
-  if (!equipmentId) redirectWithError(backPath, "Cha˝ba identifikaˇtor poloĹľky.");
+  if (!equipmentId) redirectWithError(backPath, "Chýba identifikátor položky.");
   if (!input.title || !input.performed_at) {
-    redirectWithError(backPath, "Naˇzov a daˇtum vykonania saş povinna©.");
+    redirectWithError(backPath, "Názov a dátum vykonania sú povinné.");
   }
 
 
@@ -277,22 +281,22 @@ export async function addMaintenanceLogAction(formData: FormData): Promise<void>
     await addMaintenanceLog(equipmentId, input);
     revalidatePath(`/gear/${equipmentId}`);
     revalidatePath(backPath);
-    redirectWithSuccess(backPath, "Záznam údrzby bol pridaný.");
+    redirectWithSuccess(backPath, "Záznam údržby bol pridaný.");
   } catch (error) {
     if (typeof error === "object" && error !== null && "digest" in error) throw error;
     const message =
-      error instanceof Error && error.message ? error.message : "Chyba pri zápise údrzby.";
+      error instanceof Error && error.message ? error.message : "Chyba pri zápise údržby.";
     redirectWithError(backPath, message);
   }
 }
 // =============================================================================
-// KATEGa“RIE â€“ CREATE / UPDATE / DELETE
+// KATEGÓRIE – CREATE / UPDATE / DELETE
 // =============================================================================
 
 export async function createCategoryAction(formData: FormData): Promise<void> {
   const name = field(formData, "name") ?? "";
   const code = field(formData, "code") ?? "";
-  if (!name || !code) redirectWithError("/gear/categories", "Naˇzov a kałd saş povinna©.");
+  if (!name || !code) redirectWithError("/gear/categories", "Názov a kód sú povinné.");
 
   try {
     await createEquipmentCategory({
@@ -303,22 +307,22 @@ export async function createCategoryAction(formData: FormData): Promise<void> {
     });
     revalidatePath("/gear");
     revalidatePath("/gear/categories");
-    redirectWithSuccess("/gear/categories", "Kategałria bola vytvorenaˇ.");
+    redirectWithSuccess("/gear/categories", "Kategória bola vytvorená.");
   } catch (error) {
     if (typeof error === "object" && error !== null && "digest" in error) throw error;
     const message =
-      error instanceof Error && error.message ? error.message : "Chyba pri vytvaˇrana­ kategałrie.";
+      error instanceof Error && error.message ? error.message : "Chyba pri vytváraní kategórie.";
     redirectWithError("/gear/categories", message);
   }
 }
 
 export async function updateCategoryAction(formData: FormData): Promise<void> {
   const categoryId = field(formData, "category_id") ?? "";
-  if (!categoryId) redirectWithError("/gear/categories", "Cha˝ba identifikaˇtor kategałrie.");
+  if (!categoryId) redirectWithError("/gear/categories", "Chýba identifikátor kategórie.");
 
   const name = field(formData, "name");
   const code = field(formData, "code");
-  if (!name || !code) redirectWithError("/gear/categories", "Naˇzov a kałd saş povinna©.");
+  if (!name || !code) redirectWithError("/gear/categories", "Názov a kód sú povinné.");
 
   try {
     await updateEquipmentCategory(categoryId, {
@@ -329,28 +333,28 @@ export async function updateCategoryAction(formData: FormData): Promise<void> {
     });
     revalidatePath("/gear");
     revalidatePath("/gear/categories");
-    redirectWithSuccess("/gear/categories", "Kategałria bola uloĹľenaˇ.");
+    redirectWithSuccess("/gear/categories", "Kategória bola uložená.");
   } catch (error) {
     if (typeof error === "object" && error !== null && "digest" in error) throw error;
     const message =
-      error instanceof Error && error.message ? error.message : "Chyba pri ukladana­ kategałrie.";
+      error instanceof Error && error.message ? error.message : "Chyba pri ukladaní kategórie.";
     redirectWithError("/gear/categories", message);
   }
 }
 
 export async function deleteCategoryAction(formData: FormData): Promise<void> {
   const categoryId = field(formData, "category_id") ?? "";
-  if (!categoryId) redirectWithError("/gear/categories", "Cha˝ba identifikaˇtor kategałrie.");
+  if (!categoryId) redirectWithError("/gear/categories", "Chýba identifikátor kategórie.");
 
   try {
     await deleteEquipmentCategory(categoryId);
     revalidatePath("/gear");
     revalidatePath("/gear/categories");
-    redirectWithSuccess("/gear/categories", "Kategałria bola vymazanaˇ.");
+    redirectWithSuccess("/gear/categories", "Kategória bola vymazaná.");
   } catch (error) {
     if (typeof error === "object" && error !== null && "digest" in error) throw error;
     const message =
-      error instanceof Error && error.message ? error.message : "Chyba pri mazana­ kategałrie.";
+      error instanceof Error && error.message ? error.message : "Chyba pri mazaní kategórie.";
     redirectWithError("/gear/categories", message);
   }
 }

@@ -4,7 +4,7 @@
  * Uses Supabase client with authentication context
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { createClient } from '@/lib/supabase/server';
 import { getAuthContext } from '@/lib/auth/server';
 import { hasPermissionServer } from '@/lib/auth/server';
 import { PERMISSIONS } from '@/lib/auth/permissions';
@@ -29,15 +29,13 @@ export class DrivingLicenseServiceError extends Error {
 
 /**
  * Get Supabase client for server-side operations
+ *
+ * Používa štandardného serverového klienta (anon kľúč + session z cookies),
+ * takže RLS politiky sa aplikujú na aktuálne prihláseného používateľa a nie je
+ * potrebný SUPABASE_SERVICE_ROLE_KEY v .env.local.
  */
-function getSupabaseClient() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL || '',
-    process.env.SUPABASE_SERVICE_ROLE_KEY || '',
-    {
-      auth: { persistSession: false },
-    },
-  );
+async function getSupabaseClient() {
+  return createClient();
 }
 
 /**
@@ -67,7 +65,7 @@ export async function getMemberDrivingLicenses(
 ): Promise<MemberDrivingLicense[]> {
   await requireAuthenticated();
 
-  const client = getSupabaseClient();
+  const client = await getSupabaseClient();
 
   const { data, error } = await client
     .from('member_driving_licenses')
@@ -79,7 +77,7 @@ export async function getMemberDrivingLicenses(
 
   if (error) {
     throw new DrivingLicenseServiceError(
-      `Chyba pri načítaní vodičských preukázok: ${error.message}`,
+      `Chyba pri načítaní vodičských preukazov: ${error.message}`,
       500,
     );
   }
@@ -99,7 +97,7 @@ export async function getExpiringDrivingLicenses(
 ): Promise<MemberDrivingLicense[]> {
   await requireAuthenticated();
 
-  const client = getSupabaseClient();
+  const client = await getSupabaseClient();
   const cutoffDate = new Date();
   cutoffDate.setDate(cutoffDate.getDate() + days);
 
@@ -115,7 +113,7 @@ export async function getExpiringDrivingLicenses(
 
   if (error) {
     throw new DrivingLicenseServiceError(
-      `Chyba pri načítaní vodičských preukázok: ${error.message}`,
+      `Chyba pri načítaní vodičských preukazov: ${error.message}`,
       500,
     );
   }
@@ -153,7 +151,7 @@ export async function createDrivingLicense(
     );
   }
 
-  const client = getSupabaseClient();
+  const client = await getSupabaseClient();
 
   const { data, error } = await client
     .from('member_driving_licenses')
@@ -223,9 +221,9 @@ export async function updateDrivingLicense(
     }
   }
 
-  const client = getSupabaseClient();
+  const client = await getSupabaseClient();
 
-  const updateData: Record<string, any> = {
+  const updateData: Partial<MemberDrivingLicense> = {
     updated_by: ctx.userId,
   };
 
@@ -285,7 +283,7 @@ export async function deleteDrivingLicense(licenseId: string): Promise<void> {
     );
   }
 
-  const client = getSupabaseClient();
+  const client = await getSupabaseClient();
 
   const { error } = await client
     .from('member_driving_licenses')

@@ -61,6 +61,9 @@ export interface EquipmentItem {
   purchase_date: string | null;
   purchase_price: number | null;
   next_inspection_date: string | null;
+  quantity: number;
+  is_opp: boolean;
+  photo_path: string | null;
   notes: string | null;
   created_by: string | null;
   created_at: string;
@@ -83,6 +86,8 @@ export interface AssignmentMember {
   first_name: string;
   last_name: string;
   member_number: string;
+  phone?: string | null;
+  email?: string | null;
 }
 
 export interface EquipmentAssignment {
@@ -160,7 +165,89 @@ async function assertPermission(ctx: AuthContext, permission: Permission): Promi
 }
 
 const ASSIGN_MEMBER_SELECT =
-  "*, member:members!equipment_assignments_member_id_fkey(id, first_name, last_name, member_number)";
+  "*, member:members!equipment_assignments_member_id_fkey(id, first_name, last_name, member_number, phone, email)";
+
+/**
+ * InventoryAvailabilityRow – prepočet kusov položky.
+ * available = quantity (celkom) − počet aktívnych (nevrátených) výdajov.
+ */
+export interface InventoryAvailability {
+  total: number;
+  assigned: number;
+  available: number;
+}
+
+// =============================================================================
+// READ – getInventoryAvailability
+// Vyžaduje `inventory.view`. Vráti mapu equipmentId -> počty kusov.
+// =============================================================================
+
+export async function getInventoryAvailability(): Promise<Record<string, InventoryAvailability>> {
+  const ctx = await requireAuthenticated();
+  await assertPermission(ctx, PERMISSIONS.INVENTORY_VIEW);
+
+  const supabase = await createClient();
+
+  const [itemsRaw, assignedRaw] = await Promise.all([
+    supabase.from("equipment_items").select("id, quantity, status"),
+    supabase
+      .from("equipment_assignments")
+      .select("equipment_id")
+      .is("returned_at", null),
+  ]);
+
+  const items = itemsRaw.data ?? [];
+  const assigned = assignedRaw.data ?? [];
+
+  if (itemsRaw.error || assignedRaw.error) {
+    console.error("[getInventoryAvailability] Supabase error:", itemsRaw.error ?? assignedRaw.error);
+    throw createAuthError(500, "Chyba pri výpočte dostupnosti inventára.");
+  }
+
+  const countMap: Record<string, number> = {};
+  for (const row of assigned) {
+    countMap[row.equipment_id] = (countMap[row.equipment_id] ?? 0) + 1;
+  }
+
+  const result: Record<string, InventoryAvailability> = {};
+  for (const item of items) {
+    const total = item.quantity ?? 1;
+    const assignedCount = countMap[item.id] ?? 0;
+    result[item.id] = {
+      total,
+      assigned: assignedCount,
+      available: Math.max(0, total - assignedCount),
+    };
+  }
+
+  return result;
+}
+
+// =============================================================================
+// READ – getItemAssignmentHistory
+// Vyžaduje `inventory.view`. História priradení položky vrátane člena.
+// =============================================================================
+
+export async function getItemAssignmentHistory(
+  equipmentId: string
+): Promise<EquipmentAssignment[]> {
+  const ctx = await requireAuthenticated();
+  await assertPermission(ctx, PERMISSIONS.INVENTORY_VIEW);
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("equipment_assignments")
+    .select(ASSIGN_MEMBER_SELECT)
+    .eq("equipment_id", equipmentId)
+    .order("assigned_at", { ascending: false });
+
+  if (error) {
+    console.error("[getItemAssignmentHistory] Supabase error:", error);
+    throw createAuthError(500, "Chyba pri načítavaní priradení položky.");
+  }
+
+  return (data || []) as EquipmentAssignment[];
+}
 
 // =============================================================================
 // READ – getCategories
@@ -449,6 +536,8 @@ export async function updateEquipmentItem(
     purchase_date: data.purchase_date ?? null,
     purchase_price: data.purchase_price ?? null,
     next_inspection_date: data.next_inspection_date ?? null,
+    quantity: data.quantity,
+    is_opp: data.is_opp,
     notes: data.notes ?? null,
   });
   if (!parsed.ok) {
@@ -803,6 +892,37 @@ export async function getAllAssignments(params: {
   }
 
   return (data || []) as AssignmentWithDetails[];
+}
+
+// =============================================================================
+// READ – getEquipmentPhotoUrl
+// Vyžaduje `inventory.view`. Podpísaná URL fotografie položky (bucket equipment-photos).
+// =============================================================================
+
+const EQUIPMENT_PHOTO_BUCKET = "equipment-photos";
+
+/**
+ * Vráti podpísanú URL fotografie položky alebo NULL.
+ */
+export async function getEquipmentPhotoUrl(
+  photoPath: string | null
+): Promise<string | null> {
+  if (!photoPath) return null;
+
+  const ctx = await requireAuthenticated();
+  await assertPermission(ctx, PERMISSIONS.INVENTORY_VIEW);
+
+  const supabase = await createClient();
+
+  const { data, error } = await supabase.storage
+    .from(EQUIPMENT_PHOTO_BUCKET)
+    .createSignedUrl(photoPath, 60 * 10);
+
+  if (error) {
+    console.error("[getEquipmentPhotoUrl] Supabase error:", error);
+    return null;
+  }
+  return data?.signedUrl ?? null;
 }
 
 // =============================================================================

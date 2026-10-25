@@ -1,7 +1,4 @@
 import type { NextConfig } from "next";
-import path from "path";
-
-const projectRoot = path.resolve(process.cwd());
 
 const nextConfig: NextConfig = {
   /* config options here */
@@ -17,7 +14,7 @@ const nextConfig: NextConfig = {
   cacheComponents: false,
   partialPrefetching: false,
   turbopack: {
-    root: projectRoot,
+  root: process.cwd(),
     rules: {
       "*.css": {
         loaders: ["@tailwindcss/turbopack"],

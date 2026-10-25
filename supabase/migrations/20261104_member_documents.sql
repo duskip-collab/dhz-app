@@ -1,7 +1,8 @@
--- K15.2 Phase 4: Member Documents Table & Storage
+-- ============================================================================
+-- Migration: member_documents — Dokumenty členov a úložisko metadát
 -- Date: 2026-10-18
--- Purpose: Track member documents (passports, certificates, medical forms, etc.)
--- Stores metadata; actual files in Supabase Storage
+-- Status: K15.2 Phase 4 — Member Documents Table & Storage
+-- ============================================================================
 
 CREATE TABLE IF NOT EXISTS public.member_documents (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -173,14 +174,15 @@ CREATE TRIGGER trigger_member_documents_created_by
   FOR EACH ROW
   EXECUTE FUNCTION set_member_documents_created_by();
 
--- Audit log
+-- Audit log (Safe wrapped with error handling)
 DO $$
 BEGIN
   IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'audit_log') THEN
-    INSERT INTO public.audit_log (action, table_name, details, created_at)
-    VALUES ('MIGRATION', 'member_documents', 'Created member_documents table', now())
-    ON CONFLICT DO NOTHING;
+    BEGIN
+      INSERT INTO public.audit_log (action, details, created_at)
+      VALUES ('MIGRATION_MEMBER_DOCUMENTS', 'Created member_documents table', now());
+    EXCEPTION WHEN OTHERS THEN
+      NULL;
+    END;
   END IF;
 END $$;
-
-COMMIT;

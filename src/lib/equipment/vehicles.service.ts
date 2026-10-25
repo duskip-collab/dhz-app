@@ -32,9 +32,16 @@ export interface Vehicle {
   purchase_date: string | null;
   purchase_price: number | null;
   next_inspection_date: string | null;
+  quantity: number;
+  is_opp: boolean;
   notes: string | null;
   created_at: string;
   updated_at: string;
+  category?: {
+    id: string;
+    name: string;
+    code: string;
+  } | null;
   vehicle_details: {
     id: string;
     license_plate: string | null;
@@ -44,6 +51,26 @@ export interface Vehicle {
     engine_hours: number;
     stk_valid_until: string | null;
     ek_valid_until: string | null;
+  } | null;
+  responsible_members: ResponsibleMember[];
+}
+
+/** Zodpovedný člen za vozidlo/techniku (garážmajster, správca, údržba...). */
+export interface ResponsibleMember {
+  id: string;
+  vehicle_id: string;
+  member_id: string;
+  role: string;
+  note: string | null;
+  created_at: string;
+  member?: {
+    id: string;
+    first_name: string;
+    last_name: string;
+    member_number: string;
+    phone: string | null;
+    email: string | null;
+    photo_path: string | null;
   } | null;
 }
 
@@ -94,17 +121,60 @@ export async function getVehicles(): Promise<Vehicle[]> {
   await assertPermission(ctx, PERMISSIONS.VEHICLE_VIEW);
 
   const supabase = await createClient();
-  const { data, error } = await supabase
+
+  // Kategórie, ktoré tvoria "Vozidlá a technika".
+  const { data: categoriesRaw } = await supabase
+    .from("equipment_categories")
+    .select("id, code")
+    .in("code", ["VEHICLES", "TECHNICS"]);
+  const vehicleCategoryIds = (categoriesRaw ?? []).map((c) => c.id);
+
+  let query = supabase
     .from("equipment_items")
-    .select("*, vehicle_details!inner(*)")
+    .select(
+      "*, vehicle_details!inner(*), category:equipment_categories!equipment_items_category_id_fkey(id, name, code)"
+    )
     .order("name", { ascending: true });
+
+  if (vehicleCategoryIds.length > 0) {
+    query = query.in("category_id", vehicleCategoryIds);
+  }
+
+  const { data, error } = await query;
 
   if (error) {
     console.error("[getVehicles] Supabase error:", error);
     throw createAuthError(500, "Chyba pri nacitavani vozidiel.");
   }
 
-  return (data || []) as Vehicle[];
+  const vehicles = (data || []) as Vehicle[];
+
+  if (vehicles.length === 0) return vehicles;
+
+  const { data: responsibilitiesRaw, error: respError } = await supabase
+    .from("vehicle_responsibilities")
+    .select(
+      "*, member:members!vehicle_responsibilities_member_id_fkey(id, first_name, last_name, member_number, phone, email, photo_path)"
+    )
+    .in(
+      "vehicle_id",
+      vehicles.map((v) => v.id)
+    );
+
+  if (respError) {
+    console.error("[getVehicles] responsibilities error:", respError);
+  }
+
+  const responsibilities = (responsibilitiesRaw ?? []) as ResponsibleMember[];
+  const respMap: Record<string, ResponsibleMember[]> = {};
+  for (const r of responsibilities) {
+    (respMap[r.vehicle_id] ??= []).push(r);
+  }
+
+  return vehicles.map((v) => ({
+    ...v,
+    responsible_members: respMap[v.id] ?? [],
+  }));
 }
 
 // =============================================================================
@@ -123,7 +193,9 @@ export async function getVehicleById(vehicleId: string): Promise<VehicleDetail> 
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("equipment_items")
-    .select("*, vehicle_details(*)")
+    .select(
+      "*, vehicle_details(*), category:equipment_categories!equipment_items_category_id_fkey(id, name, code)"
+    )
     .eq("id", vehicleId)
     .single();
 
@@ -137,8 +209,106 @@ export async function getVehicleById(vehicleId: string): Promise<VehicleDetail> 
     throw createAuthError(404, "Polozka nie je vozidlo.");
   }
 
-  const equipment = await getVehicleEquipment(vehicleId);
-  return { ...vehicle, vehicle_equipment: equipment };
+  const [equipment, responsibleMembers] = await Promise.all([
+    getVehicleEquipment(vehicleId),
+    getVehicleResponsibleMembers(vehicleId),
+  ]);
+
+  return { ...vehicle, vehicle_equipment: equipment, responsible_members: responsibleMembers };
+}
+
+// =============================================================================
+// READ – getVehicleResponsibleMembers (zodpovedné osoby za vozidlo)
+// Vyzaduje `vehicle.view`.
+// =============================================================================
+
+export async function getVehicleResponsibleMembers(
+  vehicleId: string
+): Promise<ResponsibleMember[]> {
+  const ctx = await requireAuthenticated();
+  await assertPermission(ctx, PERMISSIONS.VEHICLE_VIEW);
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("vehicle_responsibilities")
+    .select(
+      "*, member:members!vehicle_responsibilities_member_id_fkey(id, first_name, last_name, member_number, phone, email, photo_path)"
+    )
+    .eq("vehicle_id", vehicleId)
+    .order("created_at", { ascending: true });
+
+  if (error) {
+    console.error("[getVehicleResponsibleMembers] Supabase error:", error);
+    throw createAuthError(500, "Chyba pri nacitavani zodpovednych osob.");
+  }
+
+  return (data || []) as ResponsibleMember[];
+}
+
+// =============================================================================
+// WRITE – assignResponsibleMember (priradenie zodpovednej osoby)
+// Vyzaduje `vehicle.manage`.
+// =============================================================================
+
+export async function assignResponsibleMember(input: {
+  vehicle_id: string;
+  member_id: string;
+  role: string;
+  note?: string | null;
+}): Promise<ResponsibleMember> {
+  const ctx = await requireAuthenticated();
+  await assertPermission(ctx, PERMISSIONS.VEHICLE_MANAGE);
+
+  const role = input.role.trim();
+  if (!role) {
+    throw createAuthError(400, "Rola zodpovednej osoby je povinna.");
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("vehicle_responsibilities")
+    .insert({
+      vehicle_id: input.vehicle_id,
+      member_id: input.member_id,
+      role,
+      note: input.note?.trim() || null,
+      created_by: ctx.userId,
+    } as never)
+    .select(
+      "*, member:members!vehicle_responsibilities_member_id_fkey(id, first_name, last_name, member_number, phone, email, photo_path)"
+    )
+    .single();
+
+  if (error) {
+    console.error("[assignResponsibleMember] Supabase error:", error);
+    if (error.code === "23505") {
+      throw createAuthError(409, "Tento člen už je zodpovedný za vozidlo.");
+    }
+    throw createAuthError(500, "Chyba pri priradovani zodpovednej osoby.");
+  }
+
+  return data as ResponsibleMember;
+}
+
+// =============================================================================
+// WRITE – removeResponsibleMember (odobratie zodpovednej osoby)
+// Vyzaduje `vehicle.manage`.
+// =============================================================================
+
+export async function removeResponsibleMember(responsibilityId: string): Promise<void> {
+  const ctx = await requireAuthenticated();
+  await assertPermission(ctx, PERMISSIONS.VEHICLE_MANAGE);
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("vehicle_responsibilities")
+    .delete()
+    .eq("id", responsibilityId);
+
+  if (error) {
+    console.error("[removeResponsibleMember] Supabase error:", error);
+    throw createAuthError(500, "Chyba pri odoberani zodpovednej osoby.");
+  }
 }
 
 // =============================================================================

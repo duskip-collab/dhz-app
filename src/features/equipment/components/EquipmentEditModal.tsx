@@ -145,7 +145,20 @@ export function EquipmentEditModal({
             <Field label="Dátum najbližšej revízie" name="next_inspection_date" error={errors.next_inspection_date}>
               <input id="next_inspection_date" name="next_inspection_date" type="date" defaultValue={sliceDate(item.next_inspection_date)} className={inputCls} />
             </Field>
+            <Field label="Počet kusov" name="quantity" error={errors.quantity}>
+              <input id="quantity" name="quantity" type="number" min="0" step="1" defaultValue={item.quantity ?? 1} className={inputCls} />
+            </Field>
           </div>
+
+          <label className="inline-flex cursor-pointer items-center gap-2 text-sm text-gray-700">
+            <input
+              type="checkbox"
+              name="is_opp"
+              defaultChecked={item.is_opp ?? false}
+              className="h-5 w-5 rounded border-gray-300 text-[#C62828] focus:ring-[#C62828]"
+            />
+            OOPP (osobný ochranný pracovný prostriedok)
+          </label>
 
 
           {vehicle ? (

@@ -8,7 +8,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getAuthContext, type AuthContext } from "@/lib/auth/server";
 import { PERMISSIONS, type Permission } from "@/lib/auth/permissions";
 import { hasPermissionServer } from "@/lib/auth/server";
-import { auditMemberCreate, auditMemberUpdate, auditMemberArchive } from "@/lib/audit/audit.service";
+import { auditMemberCreate, auditMemberUpdate, auditMemberArchive, logSecurityEvent, AUDIT_MODULES, AUDIT_ACTIONS } from "@/lib/audit/audit.service";
 import { createAuthError } from "./members.errors";
 import {
   findDuplicateGuardian,
@@ -32,6 +32,9 @@ export interface Member {
   first_name: string;
   last_name: string;
   title: string | null;
+  rank: string | null;
+  position: string | null;
+  is_committee_member: boolean;
   phone: string | null;
   email: string | null;
   birth_date: string | null;
@@ -221,6 +224,9 @@ export async function createMember(
     first_name: string;
     last_name: string;
     title?: string | null;
+    rank?: string | null;
+    position?: string | null;
+    is_committee_member?: boolean;
     phone?: string | null;
     email?: string | null;
     birth_date?: string | null;
@@ -272,6 +278,9 @@ export async function createMember(
       first_name: data.first_name,
       last_name: data.last_name,
       title: data.title ?? null,
+      rank: data.rank ?? null,
+      position: data.position ?? null,
+      is_committee_member: data.is_committee_member ?? false,
       phone: data.phone ?? null,
       email: data.email ?? null,
       birth_date: data.birth_date ?? null,
@@ -315,6 +324,9 @@ export async function updateMember(
     first_name?: string;
     last_name?: string;
     title?: string | null;
+    rank?: string | null;
+    position?: string | null;
+    is_committee_member?: boolean;
     phone?: string | null;
     email?: string | null;
     birth_date?: string | null;
@@ -377,6 +389,9 @@ export async function updateMember(
   if (data.first_name !== undefined) updateData.first_name = data.first_name;
   if (data.last_name !== undefined) updateData.last_name = data.last_name;
   if (data.title !== undefined) updateData.title = data.title;
+  if (data.rank !== undefined) updateData.rank = data.rank;
+  if (data.position !== undefined) updateData.position = data.position;
+  if (data.is_committee_member !== undefined) updateData.is_committee_member = data.is_committee_member;
   if (data.phone !== undefined) updateData.phone = data.phone;
   if (data.email !== undefined) updateData.email = data.email;
   if (data.birth_date !== undefined) updateData.birth_date = data.birth_date;
@@ -548,6 +563,71 @@ export async function reactivateMember(memberId: string): Promise<Member> {
 }
 
 /**
+ * deleteMember – trvalé vymazanie člena (hard delete).
+ * Vyžaduje `members.delete`.
+ * Väzby CASCADE odstránia súvisiace záznamy (kurzy, licencie, dokumenty,
+ * priradenia výstroja, dochádzku). RLS `members_delete_admin` vyžaduje
+ * rolu ADMIN – ak volajúci rolu nemá, databáza vráti 403.
+ */
+export async function deleteMember(memberId: string): Promise<{ id: string }> {
+  const ctx = await requireAuthenticated();
+
+  const hasDelete =
+    checkPermission(ctx, PERMISSIONS.MEMBERS_DELETE) ||
+    (await checkPermissionServer(ctx.userId, PERMISSIONS.MEMBERS_DELETE));
+
+  if (!hasDelete) {
+    throw createAuthError(403, "Nemáte oprávnenie na vymazanie člena.");
+  }
+
+  const supabase = await createClient();
+
+  // overenie existencie člena
+  const { data: existingRaw, error: existError } = await supabase
+    .from("members")
+    .select("id, first_name, last_name, member_number")
+    .eq("id", memberId)
+    .single();
+
+  if (existError) {
+    console.error("[deleteMember] Supabase error:", existError);
+    throw createAuthError(404, "Člen sa nenájde.");
+  }
+
+  const existingMember = existingRaw as {
+    id: string;
+    first_name: string;
+    last_name: string;
+    member_number: string;
+  } | null;
+  if (!existingMember) {
+    throw createAuthError(404, "Člen sa nenájde.");
+  }
+
+  const { error } = await supabase.from("members").delete().eq("id", memberId);
+
+  if (error) {
+    console.error("[deleteMember] Supabase error:", error);
+    throw createAuthError(500, "Chyba pri vymazávaní člena.");
+  }
+
+  // Audit – záznam zostáva aj po odstránení člena
+  await logSecurityEvent({
+    userId: ctx.userId,
+    module: AUDIT_MODULES.MEMBERS,
+    action: AUDIT_ACTIONS.DELETE,
+    objectId: memberId,
+    data: {
+      member_number: existingMember.member_number,
+      first_name: existingMember.first_name,
+      last_name: existingMember.last_name,
+    },
+  });
+
+  return { id: memberId };
+}
+
+/**
  * getMemberPreview – Pixel-limited view (tým, čo je v getMember) s odstránením citlivých údajov
  * Toto nie je oddelená fungovanie – používa sa len pre reading, nepre export.
  */
@@ -561,6 +641,9 @@ export async function getMemberPreview(
     first_name: member.first_name,
     last_name: member.last_name,
     title: member.title,
+    rank: member.rank,
+    position: member.position,
+    is_committee_member: member.is_committee_member,
     membership_type: member.membership_type,
     status: member.status,
     joined_at: member.joined_at,

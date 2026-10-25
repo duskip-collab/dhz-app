@@ -1,4 +1,4 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+﻿# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
 # dependencies
 /node_modules
@@ -32,6 +32,7 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+!.env.example
 
 # vercel
 .vercel
@@ -39,3 +40,16 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Local diagnostics and temporary files — do not publish
+/tmp_env.txt
+/tmp_final.txt
+/tmp_read_*.cjs
+/tmp_*.cjs
+/tsc_output*.txt
+/tsc_final.txt
+/tsc_touched.txt
+/build_out.txt
+/src/tmp_*.ts.hide
+/t Exit code*
+/t *

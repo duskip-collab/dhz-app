@@ -65,6 +65,10 @@ export const NAV_SECTIONS: NavGroup[] = [
     ],
   },
   {
+    label: "Zásahy",
+    items: [{ label: "Výjazdy", href: "/incidents", icon: AlertTriangle, permission: PERMISSIONS.INCIDENTS_VIEW }],
+  },
+  {
     label: "Ľudia",
     items: [
       { label: "Kurzy a školenia", href: "/courses", icon: GraduationCap, permission: PERMISSIONS.TRAINING_VIEW },
@@ -79,12 +83,13 @@ export const NAV_SECTIONS: NavGroup[] = [
     label: "Financie",
     items: [
       { label: "Financie", href: "/finance", icon: WalletCards, permission: PERMISSIONS.FINANCE_VIEW },
+      { label: "Pokladňa", href: "/finance/cashbook", icon: WalletCards, permission: PERMISSIONS.FINANCE_VIEW },
       { label: "Reporty", href: "/reports", icon: BarChart3, permission: PERMISSIONS.REPORTS_VIEW },
     ],
   },
   {
     label: "Komunikácia",
-    items: [{ label: "Výbor", href: "/communication", icon: MessageSquare, permission: PERMISSIONS.COMMUNICATION_VIEW }],
+    items: [{ label: "Výbor", href: "/committee", icon: MessageSquare, permission: PERMISSIONS.COMMUNICATION_VIEW }],
   },
   {
     label: "Systém",

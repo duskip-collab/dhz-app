@@ -17,6 +17,7 @@ import { createAuthError } from "./members.errors";
 import type { Member, MemberGuardian } from "./members.service";
 import type { MemberCourse } from "@/types/member-courses.types";
 import type { MemberDrivingLicense } from "@/types/member-driving-licenses.types";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 // =============================================================================
 // TYPY – PROFIL ČLENA
@@ -28,12 +29,17 @@ export interface GearAssignment {
   equipment_id: string;
   assigned_at: string;
   returned_at: string | null;
-  note: string | null;
+  notes: string | null;
+  condition_on_assign: string | null;
+  condition_on_return: string | null;
   equipment: {
     id: string;
     name: string;
-    inventory_number: string;
-    category: string;
+    inventory_number: string | null;
+    location: string | null;
+    status: string | null;
+    condition: string | null;
+    category: string | null;
   };
 }
 
@@ -150,7 +156,10 @@ export async function getMemberProfile(memberId: string): Promise<MemberProfile>
 /**
  * fetchMemberBasic – Základné údaje člena
  */
-async function fetchMemberBasic(supabase: any, memberId: string): Promise<Member> {
+async function fetchMemberBasic(
+  supabase: SupabaseClient,
+  memberId: string
+): Promise<Member> {
   const { data, error } = await supabase
     .from("members")
     .select("*")
@@ -165,14 +174,14 @@ async function fetchMemberBasic(supabase: any, memberId: string): Promise<Member
     throw createAuthError(500, "Chyba pri načítavaní údajov člena.");
   }
 
-  return data as Member;
+  return data as unknown as Member;
 }
 
 /**
  * fetchMemberGuardians – Opatrovníci člena
  */
 async function fetchMemberGuardians(
-  supabase: any,
+  supabase: SupabaseClient,
   memberId: string
 ): Promise<MemberGuardian[]> {
   const { data, error } = await supabase
@@ -186,14 +195,17 @@ async function fetchMemberGuardians(
     return []; // Ak chyba, vrátim prázdny zoznam
   }
 
-  return (data || []) as MemberGuardian[];
+  return (data || []) as unknown as MemberGuardian[];
 }
 
 /**
  * fetchMemberGear – Pridelená výstroj člena
  * Vracia aktívne aj vrátené pridelenia (returned_at je null = aktívne)
  */
-async function fetchMemberGear(supabase: any, memberId: string): Promise<GearAssignment[]> {
+async function fetchMemberGear(
+  supabase: SupabaseClient,
+  memberId: string
+): Promise<GearAssignment[]> {
   const { data, error } = await supabase
     .from("equipment_assignments")
     .select(
@@ -203,12 +215,17 @@ async function fetchMemberGear(supabase: any, memberId: string): Promise<GearAss
       equipment_id,
       assigned_at,
       returned_at,
-      note,
+      notes,
+      condition_on_assign,
+      condition_on_return,
       equipment:equipment_items!equipment_assignments_equipment_id_fkey(
         id,
         name,
         inventory_number,
-        category
+        location,
+        status,
+        condition,
+        category:equipment_categories!equipment_items_category_id_fkey(name)
       )
       `
     )
@@ -220,14 +237,14 @@ async function fetchMemberGear(supabase: any, memberId: string): Promise<GearAss
     return [];
   }
 
-  return (data || []) as GearAssignment[];
+  return (data || []) as unknown as GearAssignment[];
 }
 
 /**
  * fetchMemberTraining – Tréningy a dochádzka člena
  */
 async function fetchMemberTraining(
-  supabase: any,
+  supabase: SupabaseClient,
   memberId: string
 ): Promise<TrainingAttendance[]> {
   const { data, error } = await supabase
@@ -258,14 +275,14 @@ async function fetchMemberTraining(
     return [];
   }
 
-  return (data || []) as TrainingAttendance[];
+  return (data || []) as unknown as TrainingAttendance[];
 }
 
 /**
  * fetchMemberCompetitions – Súťaže a lineups člena
  */
 async function fetchMemberCompetitions(
-  supabase: any,
+  supabase: SupabaseClient,
   memberId: string
 ): Promise<CompetitionLineup[]> {
   const { data, error } = await supabase
@@ -302,14 +319,14 @@ async function fetchMemberCompetitions(
     return [];
   }
 
-  return (data || []) as CompetitionLineup[];
+  return (data || []) as unknown as CompetitionLineup[];
 }
 
 /**
  * fetchMemberCourses – Kurzy a certifikácie člena
  */
 async function fetchMemberCourses(
-  supabase: any,
+  supabase: SupabaseClient,
   memberId: string
 ): Promise<MemberCourse[]> {
   const { data, error } = await supabase
@@ -323,14 +340,14 @@ async function fetchMemberCourses(
     return [];
   }
 
-  return (data || []) as MemberCourse[];
+  return (data || []) as unknown as MemberCourse[];
 }
 
 /**
  * fetchMemberDrivingLicenses – Vodičské preukazy člena
  */
 async function fetchMemberDrivingLicenses(
-  supabase: any,
+  supabase: SupabaseClient,
   memberId: string
 ): Promise<MemberDrivingLicense[]> {
   const { data, error } = await supabase
@@ -345,7 +362,7 @@ async function fetchMemberDrivingLicenses(
     return [];
   }
 
-  return (data || []) as MemberDrivingLicense[];
+  return (data || []) as unknown as MemberDrivingLicense[];
 }
 
 // =============================================================================

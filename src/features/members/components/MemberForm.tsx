@@ -202,6 +202,40 @@ export function MemberForm({
               />
             </Field>
           </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Hodnosť" name="rank" error={errors.rank}>
+              <input
+                id="rank"
+                name="rank"
+                defaultValue={initial?.rank ?? ""}
+                placeholder="hasič, starší hasič, veliteľ družstva…"
+                maxLength={100}
+                className={inputCls}
+                autoComplete="off"
+              />
+            </Field>
+            <Field label="Zaradenie v jednotke" name="position" error={errors.position}>
+              <input
+                id="position"
+                name="position"
+                defaultValue={initial?.position ?? ""}
+                placeholder="strojník, vodič, rozvádzač, člen výboru…"
+                maxLength={100}
+                className={inputCls}
+                autoComplete="off"
+              />
+            </Field>
+          </div>
+          <label className="flex cursor-pointer items-center gap-2 text-sm text-gray-700">
+            <input
+              type="checkbox"
+              name="is_committee_member"
+              defaultChecked={initial?.is_committee_member ?? false}
+              className="h-5 w-5 rounded border-gray-300 text-[#C62828] focus:ring-[#C62828]"
+            />
+            Člen výboru DHZ
+          </label>
         </section>
 
         {/* Sekcia B – Kontaktné údaje */}

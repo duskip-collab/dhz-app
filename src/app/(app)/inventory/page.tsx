@@ -5,6 +5,7 @@ import {
   getCategories,
   getEquipmentItems,
   getExpiringEquipment,
+  getInventoryAvailability,
 } from "@/lib/equipment/equipment.service";
 import { EquipmentStats } from "@/features/equipment/components/EquipmentStats";
 import { EquipmentFilters } from "@/features/equipment/components/EquipmentFilters";
@@ -27,7 +28,7 @@ export default async function InventoryPage({
   const search = str(params.q);
   const expiryOnly = str(params.expiry) === "1";
 
-  const [categories, items, expiring] = await Promise.all([
+  const [categories, items, expiring, availability] = await Promise.all([
     getCategories(),
     getEquipmentItems({
       category_id: categoryId,
@@ -36,6 +37,7 @@ export default async function InventoryPage({
       expiry_warning: expiryOnly || undefined,
     }),
     getExpiringEquipment(30),
+    getInventoryAvailability(),
   ]);
 
   const canEdit = hasPermission(ctx.permissions, PERMISSIONS.INVENTORY_EDIT);
@@ -59,7 +61,7 @@ export default async function InventoryPage({
 
       <EquipmentFilters categories={categories} resultCount={items.length} />
 
-      <EquipmentList items={items} categories={categories} />
+      <EquipmentList items={items} categories={categories} availability={availability} />
     </div>
   );
 }

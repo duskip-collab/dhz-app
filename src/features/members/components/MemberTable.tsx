@@ -41,6 +41,9 @@ export function MemberTable({
                         {m.title ? `${m.title} ` : ""}{m.first_name} {m.last_name}
                       </p>
                       <p className="truncate text-xs text-gray-400">{m.member_number}</p>
+                      {m.position ? (
+                        <p className="truncate text-xs font-medium text-[#C62828]">{m.position}</p>
+                      ) : null}
                     </div>
                   </Link>
                 </td>

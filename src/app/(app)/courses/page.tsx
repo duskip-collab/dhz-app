@@ -2,7 +2,7 @@ import { GraduationCap } from "lucide-react";
 import Link from "next/link";
 import { requirePermission } from "@/lib/auth/server";
 import { PERMISSIONS, hasPermission } from "@/lib/auth/permissions";
-import { getTrainings } from "@/lib/training/training.service";
+import { getTrainings, type Training } from "@/lib/training/training.service";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
@@ -19,9 +19,9 @@ export default async function CoursesPage() {
   const ctx = await requirePermission(PERMISSIONS.TRAINING_VIEW);
   const canManage = hasPermission(ctx.permissions, PERMISSIONS.TRAINING_EDIT);
 
-  let trainings: any[] = [];
+  let trainings: Training[] = [];
   try {
-    trainings = await getTrainings({ limit: 20 }) as any as any[];
+    trainings = await getTrainings({ limit: 20 });
   } catch {
     trainings = [];
   }

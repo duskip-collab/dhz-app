@@ -13,11 +13,11 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { returnGearAction } from "../actions";
 
 const CONDITION_LABELS: Record<string, string> = {
-  NEW: "NovĂ©",
-  GOOD: "DobrĂ©",
-  FAIR: "PouĹľitĂ©",
-  POOR: "OpotrebovanĂ©",
-  UNSERVICEABLE: "NeschopnĂ© sluĹľby",
+  NEW: "Nové",
+  GOOD: "Dobré",
+  FAIR: "Použité",
+  POOR: "Opotrebované",
+  UNSERVICEABLE: "Neschopné služby",
 };
 
 export default async function GearAssignmentsPage({
@@ -49,16 +49,16 @@ export default async function GearAssignmentsPage({
             href="/gear"
             className="inline-flex items-center gap-1 text-sm text-gray-600 hover:text-[#C62828]"
           >
-            <ArrowLeft className="h-4 w-4" /> SpĂ¤ĹĄ na inventĂˇr
+            <ArrowLeft className="h-4 w-4" /> Späť na inventár
           </Link>
           <h1 className="mt-2 text-2xl font-bold text-gray-900">Priradenia techniky</h1>
           <p className="mt-1 text-sm text-gray-500">
-            PrehÄľad vĂ˝dajov techniky a vĂ˝stroje ÄŤlenom.
+            Prehľad výdajov techniky a výstroje členom.
           </p>
         </div>
         {canEdit && (
           <Link href="/gear/assign">
-            <Button variant="primary" size="sm">+ NovĂ© priradenie</Button>
+            <Button variant="primary" size="sm">+ Nové priradenie</Button>
           </Link>
         )}
       </div>
@@ -84,7 +84,7 @@ export default async function GearAssignmentsPage({
               htmlFor="member_id"
               className="block text-xs font-semibold text-gray-500 uppercase mb-1"
             >
-              FiltrovaĹĄ podÄľa ÄŤlena
+              Filtrovať podľa člena
             </label>
             <select
               id="member_id"
@@ -92,7 +92,7 @@ export default async function GearAssignmentsPage({
               defaultValue={memberId ?? ""}
               className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#C62828] focus:border-[#C62828] bg-white"
             >
-              <option value="">VĹˇetci ÄŤlenovia</option>
+              <option value="">Všetci členovia</option>
               {members.map((member) => (
                 <option key={member.id} value={member.id}>
                   {member.first_name} {member.last_name}
@@ -102,7 +102,7 @@ export default async function GearAssignmentsPage({
             </select>
           </div>
           <div className="flex items-center gap-2">
-            <Button type="submit" variant="secondary" size="sm">FiltrovaĹĄ</Button>
+            <Button type="submit" variant="secondary" size="sm">Filtrovať</Button>
 
             {memberId && (
               <Link href="/gear/assignments" className="text-sm text-gray-500 hover:text-[#C62828]">
@@ -115,11 +115,11 @@ export default async function GearAssignmentsPage({
 
       {assignments.length === 0 ? (
         <EmptyState
-          title="Ĺ˝iadne priradenia"
+          title="Žiadne priradenia"
           description={
             selectedMember
-              ? "Tento ÄŤlen momentĂˇlne nemĂˇ priradenĂş Ĺľiadnu techniku."
-              : "ZatiaÄľ nebola vydanĂˇ Ĺľiadna technika."
+              ? "Tento člen momentálne nemá priradenú žiadnu techniku."
+              : "Zatiaľ nebola vydaná žiadna technika."
           }
         />
       ) : (
@@ -136,7 +136,7 @@ export default async function GearAssignmentsPage({
                       href={`/gear/${a.equipment_id}`}
                       className="text-sm font-semibold text-gray-900 hover:text-[#C62828]"
                     >
-                      {a.equipment?.name ?? `PoloĹľka #${a.equipment_id.slice(0, 8)}`}
+                      {a.equipment?.name ?? `Položka #${a.equipment_id.slice(0, 8)}`}
                     </Link>
                     {a.equipment?.inventory_number && (
                       <span className="text-xs text-gray-500">
@@ -144,23 +144,23 @@ export default async function GearAssignmentsPage({
                       </span>
                     )}
                     {a.returned_at ? (
-                      <Badge tone="gray">VrĂˇtenĂ©</Badge>
+                      <Badge tone="gray">Vrátené</Badge>
                     ) : (
-                      <Badge tone="blue">AktĂ­vne</Badge>
+                      <Badge tone="blue">Aktívne</Badge>
                     )}
                   </div>
                   <p className="mt-1 text-sm text-gray-600">
                     {a.member
                       ? `${a.member.first_name} ${a.member.last_name}${a.member.member_number ? ` (${a.member.member_number})` : ""}`
-                      : "NeznĂˇmy ÄŤlen"}
+                      : "Neznámy člen"}
                   </p>
                   <p className="mt-0.5 text-xs text-gray-500">
-                    VydanĂ©: {new Date(a.assigned_at).toLocaleDateString("sk-SK")}
+                    Vydané: {new Date(a.assigned_at).toLocaleDateString("sk-SK")}
                     {a.returned_at
-                      ? ` Â· vrĂˇtenĂ©: ${new Date(a.returned_at).toLocaleDateString("sk-SK")}`
+                      ? ` · vrátené: ${new Date(a.returned_at).toLocaleDateString("sk-SK")}`
                       : ""}
                     {a.condition_on_assign
-                      ? ` Â· stav: ${CONDITION_LABELS[a.condition_on_assign] ?? a.condition_on_assign}`
+                      ? ` · stav: ${CONDITION_LABELS[a.condition_on_assign] ?? a.condition_on_assign}`
                       : ""}
                   </p>
                   {a.notes && <p className="mt-1 text-sm text-gray-700">{a.notes}</p>}
@@ -172,16 +172,16 @@ export default async function GearAssignmentsPage({
                     <select
                       name="condition_on_return"
                       defaultValue=""
-                      aria-label="Stav pri nĂˇvrate"
+                      aria-label="Stav pri návrate"
                       className="px-2 py-1.5 text-xs border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-[#C62828] focus:border-[#C62828]"
                     >
-                      <option value="">Stavâ€¦</option>
+                      <option value="">Stav…</option>
                       {Object.entries(CONDITION_LABELS).map(([value, label]) => (
                         <option key={value} value={value}>{label}</option>
                       ))}
                     </select>
                     <Button type="submit" variant="secondary" size="sm">
-                      <Undo2 className="h-4 w-4" /> VrĂˇtiĹĄ
+                      <Undo2 className="h-4 w-4" /> Vrátiť
                     </Button>
                   </form>
                 )}

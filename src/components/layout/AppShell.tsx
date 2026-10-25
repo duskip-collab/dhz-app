@@ -4,10 +4,12 @@ import { useRouter } from "next/navigation";
 import { Sidebar } from "./Sidebar";
 import { TopBar, DesktopTopBar } from "./TopBar";
 import { MobileBottomNav } from "./MobileBottomNav";
+import { MobileFullMenuDrawer } from "../navigation/MobileFullMenuDrawer";
 import { AuthProvider } from "@/lib/auth/client";
 import { createClient } from "@/lib/supabase/client";
 import { clearOfflinePagesCache } from "@/components/pwa/offline-cache";
 import type { AppRole } from "@/lib/auth/roles";
+import { PageHeader } from "@/components/ui/PageHeader";
 
 export function AppShell({
   permissions,
@@ -58,6 +60,11 @@ export function AppShell({
           </footer>
         </div>
         <MobileBottomNav />
+        <MobileFullMenuDrawer
+          isOpen={false}
+          onClose={() => {}}
+          permissions={permissions}
+        />
       </div>
     </AuthProvider>
   );
