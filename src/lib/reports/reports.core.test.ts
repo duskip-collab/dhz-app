@@ -240,9 +240,9 @@ test("sumarizácia spočíta total, aktívne/neaktívne a typ členstva", () => 
   assert.equal(summary.active, 3);
   assert.equal(summary.inactive, 2);
   assert.deepEqual(summary.byMembershipType, {
-    ADULT: 2,
-    YOUTH: 1,
-    DORAST: 1,
+    adult: 2,
+    youth: 1,
+    dorast: 1,
     UNKNOWN: 1,
   });
 });

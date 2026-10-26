@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
+    "test:node": "node --test src/lib/finance/finance-core.test.ts src/lib/reports/reports.core.test.ts src/app/dashboard/finance/attachment-constants.test.ts src/features/members/schemas/member.validation.test.ts src/hooks/push-utils.test.ts src/lib/auth/invitations.share.test.ts src/lib/auth/server.test.ts src/lib/equipment/fault-reporting.test.ts",
     "supabase:types": "supabase gen types typescript --project-id $SUPABASE_PROJECT_ID --schema public"
   },
   "dependencies": {
