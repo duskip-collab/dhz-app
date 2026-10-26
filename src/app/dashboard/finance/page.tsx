@@ -124,8 +124,8 @@ export default async function FinanceDashboardPage({
           initial={presetAccount ? { account_id: presetAccount } : undefined}
         />
       )}
-      {showTransfer && <TransferForm accounts={accounts} />}
-      {showEdit && <EditTransactionForm accounts={accounts} onSuccess={() => revalidateFinance()} />
+      {showTransfer && (<TransferForm accounts={accounts} />)}
+      {showEdit && (<EditTransactionForm accounts={accounts} onSuccess={() => revalidateFinance()} />)}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Card title="Typy transakcii" subtitle="Evidovane smery.">
