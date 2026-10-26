@@ -6,6 +6,7 @@ import {
   updateTraining,
   changeTrainingStatus,
   cancelTraining,
+  deleteTraining,
   bulkUpdateAttendance,
   type TrainingStatus,
   type TrainingTargetGroup,
@@ -127,7 +128,7 @@ export async function updateTrainingAction(
 }
 
 // =============================================================================
-// STATUS / CANCEL
+// STATUS / CANCEL / DELETE
 // =============================================================================
 
 export async function changeTrainingStatusAction(
@@ -157,6 +158,16 @@ export async function cancelTrainingAction(trainingId: string): Promise<Training
     return { ok: true, trainingId };
   } catch (e) {
     return handleError(e, "Chyba pri rušení tréningu.");
+  }
+}
+
+export async function deleteTrainingAction(trainingId: string): Promise<TrainingActionState> {
+  try {
+    await deleteTraining(trainingId);
+    revalidatePath("/training");
+    return { ok: true };
+  } catch (e) {
+    return handleError(e, "Chyba pri vymazaní tréningu.");
   }
 }
 
