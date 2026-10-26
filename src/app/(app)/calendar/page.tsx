@@ -45,9 +45,17 @@ export default async function Page({
   const success = typeof sp.success === "string" ? sp.success : undefined;
   const events = await getUnifiedCalendarEvents();
 
+  const selectedTypesParam = typeof sp.types === "string" ? sp.types : undefined;
+  const selectedTypes = selectedTypesParam
+    ? new Set(selectedTypesParam.split(",").filter(Boolean))
+    : null;
+  const filteredEvents = selectedTypes
+    ? events.filter((e) => selectedTypes.has(e.type))
+    : events;
+
   // Zoskupenie podľa dňa.
   const byDay = new Map<string, UnifiedCalendarEvent[]>();
-  for (const ev of events) {
+  for (const ev of filteredEvents) {
     const day = ev.start_at.slice(0, 10);
     const list = byDay.get(day) ?? [];
     list.push(ev);
@@ -92,20 +100,28 @@ export default async function Page({
         </div>
       )}
 
-      {/* Legenda farebného odlíšenia */}
-      <div className="flex flex-wrap gap-2">
-        {legend.map((l) => {
-          const s = typeStyle(l.key);
-          return (
-            <span key={l.key} className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${s.badge}`}>
-              <span className={`h-2 w-2 rounded-full ${s.border.replace("border-l-", "bg-")}`} />
+      {/* Filter typov udalostí */}
+      <details className="rounded-lg border border-gray-200 bg-white p-3">
+        <summary className="cursor-pointer text-sm font-medium text-gray-700">Filter</summary>
+        <form method="get" className="mt-3 grid grid-cols-2 gap-2">
+          {legend.map((l) => (
+            <label key={l.key} className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                name="types"
+                value={l.key}
+                defaultChecked={!selectedTypes || selectedTypes.has(l.key)}
+              />
               {l.label}
-            </span>
-          );
-        })}
-      </div>
+            </label>
+          ))}
+          <button type="submit" className="col-span-2 mt-2 rounded-lg bg-[#C62828] px-3 py-2 text-sm font-medium text-white">
+            Použiť filter
+          </button>
+        </form>
+      </details>
 
-      {events.length === 0 && (
+      {filteredEvents.length === 0 && (
         <div className="text-center text-gray-500 py-12">
           Žiadne plánované udalosti v kalendári.
         </div>
