@@ -2,7 +2,8 @@ import { createClient } from "@/lib/supabase/server";
 import { createAuthError } from "@/lib/members/members.errors";
 import { requireAuthenticated } from "../documents/org-documents.auth";
 import { PERMISSIONS, VISIBILITY_PERMISSIONS } from "@/lib/auth/permissions";
-import { APP_ROLES, type AppRole, ROLE_LABELS } from "@/lib/auth/roles";
+import { APP_ROLES, type AppRole, ROLE_LABELS, isAppRole } from "@/lib/auth/roles";
+import { logSecurityEvent, AUDIT_MODULES } from "@/lib/audit/audit.service";
 
 // =============================================================================
 // Prehľad: členovia + roly + oprávnenia
@@ -215,14 +216,54 @@ export async function listPermissionCatalog(): Promise<CatalogPermission[]> {
  */
 export async function setUserRole(userId: string, roleCode: AppRole): Promise<void> {
   const ctx = await requireAuthenticated();
-  assertAdminGate(ctx);
+  // Citlivá mutácia: iba skutočný ADMIN (nie VELITEL ani všeobecná brána).
+  if (!ctx.roles.includes(APP_ROLES.ADMIN) && !ctx.permissions.includes(PERMISSIONS.ADMIN_USERS)) {
+    throw createAuthError(403, "Nemáte oprávnenie na zmenu rolí.");
+  }
+  if (!userId || !isAppRole(roleCode)) {
+    throw createAuthError(400, "Neplatné vstupné údaje.");
+  }
+  if (userId === ctx.userId && roleCode === APP_ROLES.ADMIN) {
+    throw createAuthError(403, "Self-escalation nie je povolená.");
+  }
+  if (roleCode === APP_ROLES.ADMIN) {
+    throw createAuthError(403, "Pridelenie ADMIN vyžaduje samostatný schválený bootstrap.");
+  }
 
   const supabase = await createClient();
-  const { error } = await supabase
+  const roleId = await getRoleId(roleCode);
+
+  // Duplicitné priradenie ošetrené cez upsert/insert + konflikt.
+  const { data: existing, error: existingError } = await supabase
     .from("user_roles")
-    .update({ role_id: (await getRoleId(roleCode)) })
-    .eq("user_id", userId);
+    .select("role_id")
+    .eq("user_id", userId)
+    .eq("role_id", roleId)
+    .maybeSingle();
+  if (existingError) throw createAuthError(500, "Chyba pri overovaní role.");
+
+  if (existing) {
+    // Už priradené – idempotentné správanie.
+    await logSecurityEvent({
+      userId: ctx.userId,
+      module: AUDIT_MODULES.USERS,
+      action: "role.assign.duplicate" as any,
+      objectId: userId,
+      data: { role_code: roleCode, target_user_id: userId },
+    });
+    return;
+  }
+
+  const { error } = await supabase.from("user_roles").insert({ user_id: userId, role_id: roleId });
   if (error) throw createAuthError(500, "Chyba pri nastavovaní role.");
+
+  await logSecurityEvent({
+    userId: ctx.userId,
+    module: AUDIT_MODULES.USERS,
+    action: "role.assign" as any,
+    objectId: userId,
+    data: { role_code: roleCode, target_user_id: userId },
+  });
 }
 
 /**
