@@ -12,10 +12,19 @@ export default async function CashbookPage() {
     .from("finance_accounts")
     .select("id, name, type")
     .order("name");
+  const { data: categories } = await supabase
+    .from("finance_categories")
+    .select("id, name")
+    .eq("is_active", true)
+    .order("sort_order");
   const accList = (accounts ?? []).map((a) => ({
     id: a.id as string,
     name: a.name as string,
     type: a.type as string,
+  }));
+  const catList = (categories ?? []).map((c) => ({
+    id: c.id as string,
+    name: c.name as string,
   }));
 
   let result: Awaited<ReturnType<typeof loadCashbookEntries>> | null = null;
@@ -29,8 +38,8 @@ export default async function CashbookPage() {
     <div className="space-y-6 p-6">
       <h1 className="text-xl font-bold">Pokladňa</h1>
       <div className="grid gap-4 md:grid-cols-2">
-        <CashBookForm action="income" accounts={accList} />
-        <CashBookForm action="expense" accounts={accList} />
+        <CashBookForm action="income" accounts={accList} categories={catList} />
+        <CashBookForm action="expense" accounts={accList} categories={catList} />
       </div>
       {result && (
         <div className="space-y-2">

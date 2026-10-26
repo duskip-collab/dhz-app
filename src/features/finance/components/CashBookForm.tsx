@@ -12,8 +12,9 @@ import { Button } from "@/components/ui/Button";
 interface CashBookFormProps {
   action: "income" | "expense";
   accounts: { id: string; name: string; type: string }[];
+  categories: { id: string; name: string }[];
 }
-export function CashBookForm({ action, accounts }: CashBookFormProps) {
+export function CashBookForm({ action, accounts, categories }: CashBookFormProps) {
   const serverAction = action === "income" ? createIncomeAction : createExpenseAction;
   const [state, formAction, pending] = useActionState(serverAction, null as CashbookActionState | null);
   const [clientToken, setClientToken] = useState(() => crypto.randomUUID());
@@ -64,6 +65,11 @@ return (
               className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-transparent focus:ring-2 focus:ring-[#C62828]"
             >
               <option value="">Vyberte kategóriu</option>
+              {categories.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
             </select>
           </div>
         </div>
@@ -97,7 +103,35 @@ return (
             <span className="absolute left-3 top-2.5 text-xs text-gray-400">€</span>
           </div>
         </div>
-{state && !state.ok && (
+        <div>
+          <label htmlFor="cc-counterparty" className="block text-xs font-semibold text-gray-500 mb-1">
+            {isIncome ? "Od koho" : "Komu / príjemca"}
+          </label>
+          <input
+            id="cc-counterparty"
+            name="counterparty"
+            type="text"
+            className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-transparent focus:ring-2 focus:ring-[#C62828]"
+          />
+        </div>
+        <div>
+          <label htmlFor="cc-description" className="block text-xs font-semibold text-gray-500 mb-1">
+            {isIncome ? "Za čo / účel" : "Účel / dôvod"}
+          </label>
+          <input
+            id="cc-description"
+            name="description"
+            type="text"
+            required
+            className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-transparent focus:ring-2 focus:ring-[#C62828]"
+          />
+        </div>
+        <div className="flex justify-end">
+          <Button type="submit" disabled={pending}>
+            {pending ? "Ukladanie..." : isIncome ? "Uložiť príjem" : "Uložiť výdaj"}
+          </Button>
+        </div>
+        {state && !state.ok && (
           <p
             role="alert"
             className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-[#C62828]"
