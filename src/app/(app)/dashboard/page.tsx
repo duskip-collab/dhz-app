@@ -9,6 +9,7 @@ import { getFaults } from "@/lib/equipment/faults.service";
 import { getUpcomingInspections } from "@/lib/equipment/inspections.service";
 import { getVehicles } from "@/lib/equipment/vehicles.service";
 import { getUnifiedCalendarEvents } from "@/lib/calendar/calendar.service";
+import Link from "next/link";
 import { Card } from "@/components/ui/Card";
 import { QuickActions } from "@/features/dashboard/QuickActions";
 
@@ -18,9 +19,10 @@ interface KpiCardProps {
   value: string | number;
   sub?: string;
   tone?: "default" | "warn" | "error";
+  href?: string;
 }
 
-function KpiCard({ icon, label, value, sub, tone = "default" }: KpiCardProps) {
+function KpiCard({ icon, label, value, sub, tone = "default", href }: KpiCardProps) {
   const toneClass =
     tone === "warn"
       ? "text-orange-700 border-orange-100"
@@ -28,16 +30,28 @@ function KpiCard({ icon, label, value, sub, tone = "default" }: KpiCardProps) {
         ? "text-[#C62828] border-red-100"
         : "text-gray-900 border-gray-200";
 
-  return (
-    <div className="rounded-xl border p-4 shadow-sm">
+  const className = `rounded-xl border p-4 shadow-sm hover:shadow-md hover:scale-[1.01] transition-all cursor-pointer`;
+
+  const content = (
+    <>
       <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-gray-400">
         {icon}
         {label}
       </div>
       <p className={`mt-2 text-2xl font-bold tabular-nums ${toneClass}`}>{value}</p>
       {sub ? <p className="mt-0.5 text-xs text-gray-500">{sub}</p> : null}
-    </div>
+    </>
   );
+
+  if (href) {
+    return (
+      <Link href={href} className={className}>
+        {content}
+      </Link>
+    );
+  }
+
+  return <div className={className}>{content}</div>;
 }
 
 interface AlertItem {
@@ -311,6 +325,7 @@ export default async function DashboardPage() {
           label="Členovia aktívni / celkom"
           value={`${stats.membersActive} / ${stats.membersTotal}`}
           sub={canViewMembers ? "Aktívne členstvo" : "Bez prístupu k členským dátam"}
+          href="/members"
         />
         <KpiCard
           icon={<CreditCard className="h-4 w-4" />}
