@@ -1,3 +1,9 @@
+"use client";
+
+import { useActionState } from "react";
+import { Card } from "@/components/ui/Card";
+import { Button } from "@/components/ui/Button";
+
 export interface EditTransactionFormProps {
   accounts: any[];
   onSuccess: () => void;
@@ -7,8 +13,7 @@ export const EditTransactionForm = ({
   accounts,
   onSuccess,
 }: EditTransactionFormProps) => {
-  const [isSubmitting, formMutate] = useActionState<
-    any,
+  const [serverState, formMutate, isSubmitting] = useActionState<
     any,
     FormData
   >(
@@ -16,13 +21,13 @@ export const EditTransactionForm = ({
       onSuccess();
       return { success: true };
     },
-    { success: false }
+    { success: false } as any
   );
 
   return (
     <Card title="Upraviť transakciu" subtitle="Oprava existujúceho záznamu">
       <form
-        onSubmit={formMutate}
+        action={formMutate}
         className="space-y-4"
       >
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -83,10 +88,10 @@ export const EditTransactionForm = ({
         </div>
 
         <div className="flex justify-end space-x-3">
-          <Button type="submit" disabled={isSubmitting === "pending"}>
-            {isSubmitting === "pending" ? "Ukladanie..." : "Uložiť změny"}
+          <Button type="submit" disabled={isSubmitting}>
+            {isSubmitting ? "Ukladanie..." : "Uložiť změny"}
           </Button>
-          <Button type="button" variant="outline" disabled={isSubmitting === "pending"}>
+          <Button type="button" variant="secondary" disabled={isSubmitting}>
             Zrušiť
           </Button>
         </div>

@@ -9,7 +9,7 @@ import type {
   FinanceAccountBalanceRow,
   FinanceAccountRow,
 } from "@/types/database.types";
-import { loadFinanceAccounts, loadActiveCategories } from "./actions";
+import { loadFinanceAccounts, loadActiveCategories, revalidateFinance } from "./actions";
 import { TransactionForm } from "@/components/TransactionForm";
 import { TransferForm } from "@/app/dashboard/finance/transactions/TransferForm";
 import { EditTransactionForm } from "@/components/EditTransactionForm";

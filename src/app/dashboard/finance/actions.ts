@@ -51,7 +51,7 @@ function handleError(e: unknown, fallback: string): FinanceActionState {
 
 const REVALIDATE_PATHS = ["/dashboard/finance", "/dashboard/finance/transactions"];
 
-function revalidateFinance(): void {
+export async function revalidateFinance(): Promise<void> {
   for (const p of REVALIDATE_PATHS) revalidatePath(p);
 }
 
