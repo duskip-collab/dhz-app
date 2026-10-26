@@ -18,7 +18,12 @@ export function CashBookForm({ action, accounts, categories }: CashBookFormProps
   const serverAction = action === "income" ? createIncomeAction : createExpenseAction;
   const [state, formAction, pending] = useActionState(serverAction, null as CashbookActionState | null);
   const [clientToken, setClientToken] = useState(() => crypto.randomUUID());
-  const isIncome = action === "income";
+const allowedAccountNames = ["Bankový prevod", "Hotovosť"];
+const filteredAccounts = accounts.filter((a) => allowedAccountNames.includes(a.name));
+const accountOptions = filteredAccounts.length === 2 ? filteredAccounts : accounts;
+const isIncome = action === "income";
+const defaultAccountId =
+  accountOptions.find((a) => a.name === "Bankový prevod")?.id ?? accountOptions[0]?.id ?? "";
 
   const handleSubmit = useCallback(
     (e: React.SubmitEvent<HTMLFormElement>) => {
@@ -47,7 +52,7 @@ return (
               className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-transparent focus:ring-2 focus:ring-[#C62828]"
             >
               <option value="">Vyberte účet</option>
-              {accounts.map((a) => (
+              {accountOptions.map((a) => (
                 <option key={a.id} value={a.id}>
                   {a.name}
                 </option>
