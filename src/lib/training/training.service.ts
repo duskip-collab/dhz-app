@@ -254,7 +254,6 @@ export async function updateTraining(
 
   const supabase = await createClient();
 
-  // Načítame aktuálny záznam pre cross-field validáciu času a 404 handling.
   const { data: existing, error: loadError } = await supabase
     .from("trainings")
     .select("start_time, end_time")
@@ -293,8 +292,8 @@ export async function updateTraining(
 }
 
 // =============================================================================
-// STATUS – changeTrainingStatus / cancelTraining
-// Vyžaduje `training.edit`. PLANNED -> COMPLETED | CANCELLED.
+// STATUS & DELETE – changeTrainingStatus / cancelTraining / deleteTraining
+// Vyžaduje `training.edit`.
 // =============================================================================
 
 export async function changeTrainingStatus(
@@ -333,6 +332,10 @@ export async function changeTrainingStatus(
   return training;
 }
 
+export async function cancelTraining(trainingId: string): Promise<Training> {
+  return changeTrainingStatus(trainingId, "CANCELLED");
+}
+
 export async function deleteTraining(trainingId: string): Promise<void> {
   const ctx = await requireAuthenticated();
   await assertPermission(ctx, PERMISSIONS.TRAINING_EDIT);
@@ -342,11 +345,6 @@ export async function deleteTraining(trainingId: string): Promise<void> {
     console.error("[deleteTraining] Supabase error:", error);
     throw createAuthError(500, "Chyba pri vymazaní tréningu.");
   }
-export async function cancelTraining(trainingId: string): Promise<Training> {
-  return changeTrainingStatus(trainingId, "CANCELLED");
-}
-
-  return changeTrainingStatus(trainingId, "CANCELLED");
 }
 
 // =============================================================================
@@ -382,17 +380,6 @@ export async function bulkUpdateAttendance(
 
   if (error) {
     console.error("[bulkUpdateAttendance] Supabase error:", error);
-export async function deleteTraining(trainingId: string): Promise<void> {
-  const ctx = await requireAuthenticated();
-  await assertPermission(ctx, PERMISSIONS.TRAINING_EDIT);
-  const supabase = await createClient();
-  const { error } = await supabase.from("trainings").delete().eq("id", trainingId);
-  if (error) {
-    console.error("[deleteTraining] Supabase error:", error);
-    throw createAuthError(500, "Chyba pri vymazaní tréningu.");
-  }
-}
-
     throw createAuthError(500, "Chyba pri ukladaní dochádzky.");
   }
 
@@ -403,5 +390,3 @@ export async function deleteTraining(trainingId: string): Promise<void> {
   });
   return records;
 }
-
-
