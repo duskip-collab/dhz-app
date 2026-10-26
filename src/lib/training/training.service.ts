@@ -333,7 +333,19 @@ export async function changeTrainingStatus(
   return training;
 }
 
+export async function deleteTraining(trainingId: string): Promise<void> {
+  const ctx = await requireAuthenticated();
+  await assertPermission(ctx, PERMISSIONS.TRAINING_EDIT);
+  const supabase = await createClient();
+  const { error } = await supabase.from("trainings").delete().eq("id", trainingId);
+  if (error) {
+    console.error("[deleteTraining] Supabase error:", error);
+    throw createAuthError(500, "Chyba pri vymazaní tréningu.");
+  }
 export async function cancelTraining(trainingId: string): Promise<Training> {
+  return changeTrainingStatus(trainingId, "CANCELLED");
+}
+
   return changeTrainingStatus(trainingId, "CANCELLED");
 }
 
@@ -370,6 +382,17 @@ export async function bulkUpdateAttendance(
 
   if (error) {
     console.error("[bulkUpdateAttendance] Supabase error:", error);
+export async function deleteTraining(trainingId: string): Promise<void> {
+  const ctx = await requireAuthenticated();
+  await assertPermission(ctx, PERMISSIONS.TRAINING_EDIT);
+  const supabase = await createClient();
+  const { error } = await supabase.from("trainings").delete().eq("id", trainingId);
+  if (error) {
+    console.error("[deleteTraining] Supabase error:", error);
+    throw createAuthError(500, "Chyba pri vymazaní tréningu.");
+  }
+}
+
     throw createAuthError(500, "Chyba pri ukladaní dochádzky.");
   }
 
