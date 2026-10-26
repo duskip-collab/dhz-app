@@ -74,6 +74,13 @@ export default async function Page({
         </p>
       </div>
 
+      {canManage && (
+        <div className="mb-2">
+          <a href="/calendar/new" className="inline-flex items-center rounded-lg bg-[#C62828] px-4 py-2 text-sm font-semibold text-white">
+            + Pridať akciu
+          </a>
+        </div>
+      )}
       {error && (
         <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-[#C62828]">
           {error}

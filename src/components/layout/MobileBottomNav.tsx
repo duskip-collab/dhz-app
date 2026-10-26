@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -14,11 +13,9 @@ import {
   Users,
   WalletCards,
   X,
-  Menu,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth/client";
 import { PERMISSIONS } from "@/lib/auth/permissions";
-import { MobileFullMenuDrawer } from "../navigation/MobileFullMenuDrawer";
 
 const TABS = [
   {
@@ -50,7 +47,6 @@ const TABS = [
 export function MobileBottomNav() {
   const pathname = usePathname();
   const { permissions } = useAuth();
-  const [sheetOpen, setSheetOpen] = useState(false);
 
   const visibleTabs = TABS.filter(
     (tab) => !tab.permission || permissions.includes(tab.permission),
@@ -83,24 +79,8 @@ export function MobileBottomNav() {
               </Link>
             );
           })}
-          {/** Full menu button that opens the drawer */}
-          <button
-            onClick={() => setSheetOpen(true)}
-            className="flex items-center justify-center w-12 h-12 -mt-6 rounded-full bg-[#C62828] text-white shadow-lg text-2xl font-light leading-none"
-            aria-label="Zobraziť všetky moduly"
-          >
-            <Menu className="w-5 h-5" />
-          </button>
         </div>
       </nav>
-
-      {sheetOpen && (
-        <MobileFullMenuDrawer
-          isOpen={sheetOpen}
-          onClose={() => setSheetOpen(false)}
-          permissions={permissions}
-        />
-      )}
     </>
   );
 }

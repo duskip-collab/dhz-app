@@ -46,7 +46,7 @@ export function AppShell({
           onLogout={handleLogout}
         />
         <div className="flex-1 min-w-0 flex flex-col min-h-screen">
-          <TopBar userName={userName} userEmail={userEmail} />
+          <TopBar userName={userName} userEmail={userEmail} permissions={permissions} />
           <DesktopTopBar userName={userName} userEmail={userEmail} />
           <main className="flex-1 w-full max-w-6xl mx-auto px-4 sm:px-6 py-6 pb-24 lg:pb-10">
             {children}
@@ -60,11 +60,6 @@ export function AppShell({
           </footer>
         </div>
         <MobileBottomNav />
-        <MobileFullMenuDrawer
-          isOpen={false}
-          onClose={() => {}}
-          permissions={permissions}
-        />
       </div>
     </AuthProvider>
   );

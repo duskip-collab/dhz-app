@@ -65,7 +65,9 @@ export const AUDIT_ACTIONS = {
   EQUIPMENT_ASSIGN: "equipment_assignments:assign",
   EQUIPMENT_RETURN: "equipment_assignments:return",
   EQUIPMENT_MAINTENANCE: "equipment_maintenance_logs:create",
-
+  FAULT_CREATE: "equipment_faults:create",
+  FAULT_UPDATE: "equipment_faults:update",
+  FAULT_DELETE: "equipment_faults:delete",
   // Incidents & Operations module
   INCIDENT_CREATE: "incidents:create",
   INCIDENT_UPDATE: "incidents:update",
@@ -109,6 +111,7 @@ export const AUDIT_MODULES = {
   EQUIPMENT_ITEMS: "equipment_items",
   EQUIPMENT_ASSIGNMENTS: "equipment_assignments",
   EQUIPMENT_MAINTENANCE_LOGS: "equipment_maintenance_logs",
+  EQUIPMENT_FAULTS: "equipment_faults",
   INCIDENTS: "incidents",
   CALENDAR_EVENTS: "calendar_events",
   ANNOUNCEMENTS: "announcements",

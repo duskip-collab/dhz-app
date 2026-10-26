@@ -9,6 +9,7 @@ import { getAuthContext, type AuthContext } from "@/lib/auth/server";
 import { PERMISSIONS, type Permission } from "@/lib/auth/permissions";
 import { hasPermissionServer } from "@/lib/auth/server";
 import { createAuthError } from "@/lib/members/members.errors";
+import { logSecurityEvent, AUDIT_MODULES, AUDIT_ACTIONS } from "@/lib/audit/audit.service";
 import {
   validateFault,
   validateFaultUpdate,
@@ -155,6 +156,13 @@ export async function reportFault(input: FaultInput): Promise<EquipmentFault> {
     console.error("[reportFault] Supabase error:", error);
     throw createAuthError(500, "Chyba pri nahlasovani poruchy.");
   }
+  await logSecurityEvent({
+    userId: ctx.userId,
+    module: AUDIT_MODULES.EQUIPMENT_FAULTS,
+    action: AUDIT_ACTIONS.FAULT_CREATE,
+    objectId: (data as EquipmentFault).id,
+    data: { equipment_id: (data as EquipmentFault).equipment_id, severity: (data as EquipmentFault).severity, status: "REPORTED" },
+  });
   return data as EquipmentFault;
 }
 
@@ -191,6 +199,13 @@ export async function updateFault(faultId: string, input: FaultUpdate): Promise<
     console.error("[updateFault] Supabase error:", error);
     throw createAuthError(500, "Chyba pri ukladani poruchy.");
   }
+  await logSecurityEvent({
+    userId: ctx.userId,
+    module: AUDIT_MODULES.EQUIPMENT_FAULTS,
+    action: AUDIT_ACTIONS.FAULT_UPDATE,
+    objectId: faultId,
+    data: { status: (data as EquipmentFault).status, priority: (data as EquipmentFault).priority },
+  });
   return data as EquipmentFault;
 }
 
@@ -210,6 +225,13 @@ export async function deleteFault(faultId: string): Promise<void> {
     console.error("[deleteFault] Supabase error:", error);
     throw createAuthError(500, "Chyba pri mazani poruchy.");
   }
+  await logSecurityEvent({
+    userId: ctx.userId,
+    module: AUDIT_MODULES.EQUIPMENT_FAULTS,
+    action: AUDIT_ACTIONS.FAULT_DELETE,
+    objectId: faultId,
+    data: { fault_id: faultId },
+  });
 }
 
 async function assertPermission(ctx: AuthContext, permission: Permission): Promise<void> {
