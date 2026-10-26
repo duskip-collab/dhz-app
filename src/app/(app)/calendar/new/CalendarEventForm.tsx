@@ -6,6 +6,20 @@ import { createCalendarEventAction } from "../actions";
 export default function CalendarEventForm() {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [startAt, setStartAt] = useState("");
+  const [endAt, setEndAt] = useState("");
+
+  function handleStartChange(value: string) {
+    setStartAt(value);
+    if (value) {
+      const d = new Date(value);
+      d.setDate(d.getDate() + 1);
+      // datetime-local format
+      const pad = (n: number) => String(n).padStart(2, "0");
+      const formatted = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+      setEndAt(formatted);
+    }
+  }
 
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -41,11 +55,11 @@ export default function CalendarEventForm() {
       </div>
       <div>
         <label className="block text-sm font-medium">Začiatok</label>
-        <input name="start_at" type="datetime-local" required className="mt-1 w-full border rounded px-3 py-2" />
+        <input name="start_at" type="datetime-local" required className="mt-1 w-full border rounded px-3 py-2" value={startAt} onChange={(e) => handleStartChange(e.target.value)} />
       </div>
       <div>
         <label className="block text-sm font-medium">Koniec</label>
-        <input name="end_at" type="datetime-local" required className="mt-1 w-full border rounded px-3 py-2" />
+        <input name="end_at" type="datetime-local" required className="mt-1 w-full border rounded px-3 py-2" value={endAt} onChange={(e) => setEndAt(e.target.value)} />
       </div>
       <div>
         <label className="block text-sm font-medium">Miesto</label>
