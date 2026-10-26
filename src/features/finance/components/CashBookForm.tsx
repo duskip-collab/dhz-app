@@ -25,20 +25,14 @@ const isIncome = action === "income";
 const defaultAccountId =
   accountOptions.find((a) => a.name === "Bankový prevod")?.id ?? accountOptions[0]?.id ?? "";
 
-  const handleSubmit = useCallback(
-    (e: React.SubmitEvent<HTMLFormElement>) => {
-      e.preventDefault();
-    },
-    [clientToken, isIncome],
-  );
-return (
+  return (
     <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
       <div className="flex items-start justify-between gap-2 mb-3">
         <h3 className="text-sm font-bold text-gray-900">
           {isIncome ? "+ Pridať príjem" : "− Pridať výdaj"}
         </h3>
       </div>
-      <form action={formAction} onSubmit={handleSubmit} className="space-y-3">
+      <form action={formAction} className="space-y-3">
         <input type="hidden" name="client_token" />
         <div className="grid gap-3 sm:grid-cols-2">
           <div>
