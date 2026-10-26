@@ -11,7 +11,8 @@ import type {
 } from "@/types/database.types";
 import { loadFinanceAccounts, loadActiveCategories } from "./actions";
 import { TransactionForm } from "@/components/TransactionForm";
-import { TransferForm } from "@/components/TransferForm";
+import { TransferForm } from "@/app/dashboard/finance/transactions/TransferForm";
+import { EditTransactionForm } from "@/components/EditTransactionForm";
 
 const TYPE_LABELS: Record<string, string> = {
   CASH: "Pokladna",
@@ -34,6 +35,7 @@ export default async function FinanceDashboardPage({
     typeof v === "string" ? v : Array.isArray(v) ? v[0] ?? "" : "";
   const showNew = pick(searchParams.new) === "true";
   const showTransfer = pick(searchParams.transfer) === "true";
+  const showEdit = pick(searchParams.edit) === "true";
   const presetAccount = pick(searchParams.account_id);
 
   const supabase = await createClient();
@@ -123,6 +125,7 @@ export default async function FinanceDashboardPage({
         />
       )}
       {showTransfer && <TransferForm accounts={accounts} />}
+      {showEdit && <EditTransactionForm accounts={accounts} onSuccess={() => revalidateFinance()} />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Card title="Typy transakcii" subtitle="Evidovane smery.">
