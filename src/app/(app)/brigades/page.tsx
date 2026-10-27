@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { requirePermission } from "@/lib/auth/server";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { getWorkParties } from "@/lib/work-parties/work-parties.service";
@@ -7,7 +8,10 @@ export default async function Page() {
   const workParties = await getWorkParties();
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-gray-900">Brigády</h1>
+      <div className="flex justify-between items-center">
+        <h1 className="text-2xl font-bold text-gray-900">Brigády</h1>
+        <Link href="/brigades/new" className="bg-red-700 text-white px-4 py-2 rounded">+ Nová brigáda</Link>
+      </div>
       <div className="space-y-4">
         {workParties.map((wp) => (
           <div key={wp.id} className="border rounded-lg p-4 bg-white">

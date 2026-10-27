@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { requirePermission } from "@/lib/auth/server";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { getMeetings } from "@/lib/meetings/meetings.service";
@@ -7,7 +8,10 @@ export default async function Page() {
   const meetings = await getMeetings();
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-gray-900">Porady</h1>
+      <div className="flex justify-between items-center">
+        <h1 className="text-2xl font-bold text-gray-900">Porady</h1>
+        <Link href="/meetings/new" className="bg-red-700 text-white px-4 py-2 rounded">+ Nová porada</Link>
+      </div>
       <div className="space-y-4">
         {meetings.map((m) => (
           <div key={m.id} className="border rounded-lg p-4 bg-white">
