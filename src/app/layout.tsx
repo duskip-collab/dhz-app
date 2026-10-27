@@ -9,10 +9,10 @@ const inter = Inter({ subsets: ["latin", "latin-ext"] });
 
 export const metadata: Metadata = {
   title: {
-    default: "DHZ Digital OS",
-    template: "%s | DHZ Digital OS",
+    default: "DHZ Ružindol",
+    template: "%s | DHZ Ružindol",
   },
-  applicationName: "DHZ Digital OS",
+  applicationName: "DHZ Ružindol",
   description:
     "Digitálny organizačný systém dobrovoľného hasičského zboru",
   manifest: "/manifest.webmanifest",
@@ -28,7 +28,7 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "DHZ Digital OS",
+    title: "DHZ Ružindol",
   },
 };
 

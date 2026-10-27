@@ -16,7 +16,7 @@ import { ROLE_LABELS, type AppRole } from "./roles.ts";
 import type { ShareLinks, ShareMessageParams } from "./invitations.types.ts";
 
 export const DEFAULT_ORGANIZATION_NAME = "DHZ RUŽINDOL";
-export const APP_TITLE = "DHZ Digital OS";
+export const APP_TITLE = "DHZ Ružindol";
 export const REGISTRATION_PATH = "/register";
 
 /**
@@ -256,7 +256,7 @@ export function buildInvitationMessage(params: ShareMessageParams): string {
     lines.push("");
     lines.push("Registračný odkaz sa pridá po otvorení registračnej stránky.");
     lines.push("Postup:");
-    lines.push("1. Otvorte registračnú stránku DHZ Digital OS");
+    lines.push("1. Otvorte registračnú stránku DHZ Ružindol");
     lines.push("2. Zadajte e-mail, silné heslo a tento pozývací kód");
     lines.push("3. Potvrďte registráciu a prihláste sa");
   }

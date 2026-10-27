@@ -149,7 +149,7 @@ export default async function MemberProfilePage({
         <StatCard icon={Briefcase} label="Výstroj" value={stats.activeGearCount} suffix={`/${stats.totalGearAssigned}`} />
         <StatCard icon={Calendar} label="Dochádzka" value={stats.presentCount} suffix={`/${stats.totalTrainingAttendances}`} />
         <StatCard icon={Trophy} label="Súťaže" value={stats.totalCompetitions} suffix="" />
-        <StatCard icon={Heart} label="Opatrovníci" value={profile.guardians.length} suffix="" />
+        <StatCard icon={Heart} label="Zákoný zástupca" value={profile.guardians.length} suffix="" />
         <StatCard icon={FileText} label="Dokumenty" value={0} suffix="" />
       </div>
 

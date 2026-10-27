@@ -98,7 +98,7 @@ export function InstallPrompt() {
               <span className="text-sm font-bold">DHZ</span>
             </div>
             <div>
-              <h3 className="text-base font-bold text-gray-900">DHZ Digital OS</h3>
+              <h3 className="text-base font-bold text-gray-900">DHZ Ružindol</h3>
               <p className="text-xs text-gray-500">Nainštalovať aplikáciu</p>
             </div>
           </div>

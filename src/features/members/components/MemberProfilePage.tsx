@@ -48,7 +48,7 @@ const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
   { id: 'competitions', label: 'Súťaže', icon: <Trophy className="h-4 w-4" /> },
   { id: 'courses', label: 'Kurzy', icon: <BookOpen className="h-4 w-4" /> },
   { id: 'driving_licenses', label: 'Vodičský preukaz', icon: <Zap className="h-4 w-4" /> },
-  { id: 'guardians', label: 'Opatrovníci', icon: <Heart className="h-4 w-4" /> },
+  { id: 'guardians', label: 'Zákoný zástupca', icon: <Heart className="h-4 w-4" /> },
 ];
 
 export function MemberProfileContent({
@@ -182,7 +182,7 @@ function OverviewTab({
         <QuickStatCard label="Pridelená výstroj" value={stats.activeGearCount} />
         <QuickStatCard label="Tréningy" value={stats.totalTrainingAttendances} />
         <QuickStatCard label="Súťaže" value={stats.totalCompetitions} />
-        <QuickStatCard label="Opatrovníci" value={profile.guardians.length} />
+        <QuickStatCard label="Zákoný zástupca" value={profile.guardians.length} />
       </div>
     </div>
   );

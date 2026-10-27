@@ -34,7 +34,7 @@ export interface PushPayload {
  */
 export function parsePushPayload(raw: string | null | undefined): PushPayload {
   const fallback: PushPayload = {
-    title: "DHZ Digital OS",
+    title: "DHZ Ružindol",
     body: "",
     url: null,
     icon: null,
