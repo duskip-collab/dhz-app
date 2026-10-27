@@ -233,26 +233,9 @@ export async function setUserRole(userId: string, roleCode: AppRole): Promise<vo
   const supabase = await createClient();
   const roleId = await getRoleId(roleCode);
 
-  // Duplicitné priradenie ošetrené cez upsert/insert + konflikt.
-  const { data: existing, error: existingError } = await supabase
-    .from("user_roles")
-    .select("role_id")
-    .eq("user_id", userId)
-    .eq("role_id", roleId)
-    .maybeSingle();
-  if (existingError) throw createAuthError(500, "Chyba pri overovaní role.");
-
-  if (existing) {
-    // Už priradené – idempotentné správanie.
-    await logSecurityEvent({
-      userId: ctx.userId,
-      module: AUDIT_MODULES.USERS,
-      action: "role.assign.duplicate" as any,
-      objectId: userId,
-      data: { role_code: roleCode, target_user_id: userId },
-    });
-    return;
-  }
+  // Výmena roly: odstrániť všetky existujúce roly používateľa, potom vložiť novú.
+  const { error: delErr } = await supabase.from("user_roles").delete().eq("user_id", userId);
+  if (delErr) throw createAuthError(500, "Chyba pri výmene role.");
 
   const { error } = await supabase.from("user_roles").insert({ user_id: userId, role_id: roleId });
   if (error) throw createAuthError(500, "Chyba pri nastavovaní role.");

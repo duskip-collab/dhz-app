@@ -114,8 +114,9 @@ export function AdminMemberManager({
               <SlidersHorizontal className="h-4 w-4 text-gray-400" />
               <h3 className="text-sm font-semibold text-gray-900">Rola</h3>
             </div>
+            {member.auth_user_id ? (
             <form action={roleAction} className="space-y-2">
-              <input type="hidden" name="user_id" value={member.auth_user_id ?? ""} />
+              <input type="hidden" name="user_id" value={member.auth_user_id} />
               <select
                 name="role_code"
                 defaultValue={member.roles[0] ?? ""}
@@ -136,6 +137,11 @@ export function AdminMemberManager({
                 {rolePending ? "Ukladám…" : "Uložiť rolu"}
               </button>
             </form>
+            ) : (
+              <p className="text-xs text-amber-700">
+                Tento člen zatiaľ nemá používateľský účet. Najprv ho treba bezpečne prepojiť.
+              </p>
+            )}
             {roleState?.message && !roleState?.ok && (
               <p className="mt-2 text-xs text-[#C62828]">{roleState.message}</p>
             )}
