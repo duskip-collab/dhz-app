@@ -47,7 +47,7 @@ const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
   { id: 'training', label: 'Tréningy', icon: <Calendar className="h-4 w-4" /> },
   { id: 'competitions', label: 'Súťaže', icon: <Trophy className="h-4 w-4" /> },
   { id: 'courses', label: 'Kurzy', icon: <BookOpen className="h-4 w-4" /> },
-  { id: 'driving_licenses', label: 'Vodiče', icon: <Zap className="h-4 w-4" /> },
+  { id: 'driving_licenses', label: 'Vodičský preukaz', icon: <Zap className="h-4 w-4" /> },
   { id: 'guardians', label: 'Opatrovníci', icon: <Heart className="h-4 w-4" /> },
 ];
 
