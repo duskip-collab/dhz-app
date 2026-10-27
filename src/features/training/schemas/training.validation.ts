@@ -14,7 +14,7 @@ export interface CreateTrainingInput {
   description?: string | null;
   target_group?: TrainingTargetGroup;
   start_time: string;
-  end_time: string;
+  end_time?: string | null;
   location?: string | null;
   trainer_id?: string | null;
 }
@@ -94,8 +94,11 @@ export function validateCreateTraining(input: CreateTrainingInput): ValidationRe
   const start = parseDate(input.start_time);
   if (!start) errors.start_time = "Začiatok tréningu je povinný a musí byť platný dátum.";
 
-  const end = parseDate(input.end_time);
-  if (!end) errors.end_time = "Koniec tréningu je povinný a musí byť platný dátum.";
+  let end: Date | null = null;
+  if (!isBlank(input.end_time)) {
+    end = parseDate(input.end_time);
+    if (!end) errors.end_time = "Koniec tréningu musí byť platný dátum.";
+  }
 
   if (start && end && end <= start) {
     errors.end_time = "Koniec tréningu musí byť po začiatku.";
@@ -115,7 +118,7 @@ export function validateCreateTraining(input: CreateTrainingInput): ValidationRe
       description: trimOrNull(input.description ?? null),
       target_group: targetGroup,
       start_time: (start as Date).toISOString(),
-      end_time: (end as Date).toISOString(),
+      end_time: end ? (end as Date).toISOString() : null,
       location: trimOrNull(input.location ?? null),
       trainer_id: trainerId,
     },

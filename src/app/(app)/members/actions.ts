@@ -58,6 +58,7 @@ function memberFields(formData: FormData) {
     status: field(formData, "status"),
     joined_at: field(formData, "joined_at"),
     notes: field(formData, "notes"),
+    health_insurance: field(formData, "health_insurance"),
   };
 }
 

@@ -54,7 +54,7 @@ export interface Training {
   description: string | null;
   target_group: TrainingTargetGroup;
   start_time: string;
-  end_time: string;
+  end_time: string | null;
   location: string | null;
   trainer_id: string | null;
   status: TrainingStatus;

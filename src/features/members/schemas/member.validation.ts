@@ -32,6 +32,7 @@ export interface CreateMemberInput {
   status?: MemberStatus;
   joined_at?: string;
   notes?: string | null;
+  health_insurance?: string | null;
 }
 
 export interface UpdateMemberInput {
@@ -50,6 +51,7 @@ export interface UpdateMemberInput {
   joined_at?: string;
   left_at?: string | null;
   notes?: string | null;
+  health_insurance?: string | null;
 }
 
 export interface GuardianInput {
@@ -279,6 +281,7 @@ export interface RawMemberFormFields {
   status?: string | null;
   joined_at?: string | null;
   notes?: string | null;
+  health_insurance?: string | null;
 }
 
 /** Prenesie existujúceho člena do formulárových defaultov (predvyplnenie pri úprave). */
@@ -299,6 +302,7 @@ export function memberToFormValues(member: Member): MemberFormValues {
     status: member.status,
     joined_at: member.joined_at ? member.joined_at.slice(0, 10) : "",
     notes: member.notes ?? "",
+    health_insurance: member.health_insurance ?? "",
   };
 }
 
@@ -324,6 +328,7 @@ export function createMemberInputFromForm(
     status: isMemberStatus(raw.status) ? raw.status : "active",
     joined_at: raw.joined_at ?? new Date().toISOString(),
     notes: raw.notes ?? null,
+    health_insurance: raw.health_insurance ?? null,
   };
 }
 /**
@@ -356,6 +361,7 @@ export function updateMemberInputFromForm(
   }
   if (raw.joined_at !== undefined) result.joined_at = raw.joined_at ?? undefined;
   if (raw.notes !== undefined) result.notes = raw.notes ?? null;
+  if (raw.health_insurance !== undefined) result.health_insurance = raw.health_insurance ?? null;
   return result;
 }
 

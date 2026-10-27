@@ -129,13 +129,12 @@ export function TrainingForm({
             className={inputCls}
           />
         </Field>
-        <Field label="Koniec" name="end_time" error={errors.end_time} required>
+        <Field label="Koniec" name="end_time" error={errors.end_time}>
           <input
             id="end_time"
             name="end_time"
             type="datetime-local"
             defaultValue={toLocalInput(training?.end_time ?? null)}
-            required
             className={inputCls}
           />
         </Field>

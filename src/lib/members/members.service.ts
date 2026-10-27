@@ -45,6 +45,7 @@ export interface Member {
   left_at: string | null;
   notes: string | null;
   photo_path: string | null;
+  health_insurance: string | null;
   created_at: string;
   updated_at: string;
   created_by: string | null;

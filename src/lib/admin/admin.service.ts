@@ -4,6 +4,10 @@ import { requireAuthenticated } from "../documents/org-documents.auth";
 import { PERMISSIONS, VISIBILITY_PERMISSIONS } from "@/lib/auth/permissions";
 import { APP_ROLES, type AppRole, ROLE_LABELS, isAppRole } from "@/lib/auth/roles";
 import { logSecurityEvent, AUDIT_MODULES } from "@/lib/audit/audit.service";
+import {
+  createInvitation,
+  revokeInvitation,
+} from "@/lib/auth/invitations.service";
 
 // =============================================================================
 // Prehľad: členovia + roly + oprávnenia
@@ -296,8 +300,8 @@ export async function toggleUserPermission(
 }
 
 /**
- * generateMemberAccessCode – vygeneruje jedinečný prístupový kód pre člena.
- * Používa RPC set_member_access_code (pgcrypto SHA-256 hash).
+ * generateMemberAccessCode – vygeneruje jedinečný prístupový kód pre člena
+ * s existujúcim auth_user_id (kód sa stane heslom v auth.users).
  */
 export async function generateMemberAccessCode(userId: string): Promise<string> {
   const ctx = await requireAuthenticated();
@@ -311,6 +315,117 @@ export async function generateMemberAccessCode(userId: string): Promise<string> 
   });
   if (error) throw createAuthError(500, "Chyba pri generovaní prístupového kódu.");
   return (data as string) ?? code;
+}
+
+/**
+ * generateMemberAccessCodeForMember – vygeneruje pozývací kód pre člena
+ * bez ohľadu na to, či má už účet. Kód je viazaný na member_id.
+ * Použije existujúci systém pozývacíх кодov (invitations).
+ */
+export async function generateMemberAccessCodeForMember(
+  memberId: string,
+  roleCode: AppRole,
+): Promise<{ code: string; invitationId: string; expiresAt: string }> {
+  const ctx = await requireAuthenticated();
+  assertAdminGate(ctx);
+  if (!isAppRole(roleCode)) {
+    throw createAuthError(400, "Neplatný kód role.");
+  }
+
+  const created = await createInvitation({
+    role: roleCode,
+    memberId: memberId ?? null,
+    maxUses: 1,
+    validDays: 14,
+    notes: "Prístupový kód pre člena (K16.0)",
+  });
+
+  await logSecurityEvent({
+    userId: ctx.userId,
+    module: AUDIT_MODULES.USERS,
+    action: "invitation.create" as any,
+    objectId: created.invitation.id,
+    data: { member_id: memberId, role_code: roleCode },
+  });
+
+  return {
+    code: created.code,
+    invitationId: created.invitation.id,
+    expiresAt: created.invitation.expires_at,
+  };
+}
+
+/**
+ * revokeMemberAccessForMember – zruší aktívnu pozvánku pre člena.
+ */
+export async function revokeMemberAccessForMember(memberId: string): Promise<void> {
+  const ctx = await requireAuthenticated();
+  assertAdminGate(ctx);
+
+  const supabase = await createClient();
+  const { data: invitations, error } = await supabase
+    .from("invitations")
+    .select("id")
+    .eq("member_id", memberId)
+    .eq("status", "active")
+    .gt("expires_at", new Date().toISOString())
+    .maybeSingle();
+
+  if (error) throw createAuthError(500, "Chyba pri načítaní pozvánky.");
+  if (!invitations) {
+    throw createAuthError(404, "Žiadna aktívna pozvánka pre tohto člena.");
+  }
+
+  await revokeInvitation(invitations.id);
+
+  await logSecurityEvent({
+    userId: ctx.userId,
+    module: AUDIT_MODULES.USERS,
+    action: "invitation.revoke" as any,
+    objectId: invitations.id,
+    data: { member_id: memberId },
+  });
+}
+
+/**
+ * getMemberInvitationStatus – vráti stav prístupu člena (pozvánka, účet, bez prístupu).
+ */
+export async function getMemberInvitationStatus(memberId: string): Promise<{
+  hasAccount: boolean;
+  hasActiveInvitation: boolean;
+  invitationStatus: string | null;
+  invitationRole: string | null;
+  invitationExpiresAt: string | null;
+  accessStatus: string;
+}> {
+  const ctx = await requireAuthenticated();
+  assertAdminGate(ctx);
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("member_access_status")
+    .select("*")
+    .eq("member_id", memberId)
+    .maybeSingle();
+
+  if (error) throw createAuthError(500, "Chyba pri načítaní stavu prístupu.");
+
+  const row = data as {
+    access_status: string;
+    auth_user_id: string | null;
+    invitation_status: string | null;
+    invitation_role: string | null;
+    invitation_expires_at: string | null;
+  } | null;
+
+  return {
+    hasAccount: !!row?.auth_user_id,
+    hasActiveInvitation: row?.access_status === "invitation_pending",
+    invitationStatus: row?.invitation_status ?? null,
+    invitationRole: row?.invitation_role ?? null,
+    invitationExpiresAt: row?.invitation_expires_at ?? null,
+    accessStatus: row?.access_status ?? "no_account",
+  };
 }
 
 // ============================================================================

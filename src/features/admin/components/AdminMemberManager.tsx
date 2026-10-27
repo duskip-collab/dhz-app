@@ -1,11 +1,14 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { X, Share2, SlidersHorizontal, Mail, Phone } from "lucide-react";
+import { X, Share2, SlidersHorizontal, Mail, Phone, Copy, PhoneOff, MessageCircle } from "lucide-react";
 import {
   setUserRoleAction,
   toggleUserPermissionAction,
   generateMemberAccessCodeAction,
+  generateMemberAccessCodeForMemberAction,
+  revokeMemberAccessCodeAction,
+  getMemberInvitationStatusAction,
 } from "@/app/(app)/admin/actions";
 import type { AdminMemberRow } from "@/lib/admin/admin.service";
 import { ROLE_LABELS } from "@/lib/auth/roles";
@@ -40,8 +43,32 @@ export function AdminMemberManager({
 }) {
   const [roleState, roleAction, rolePending] = useActionState(setUserRoleAction, null);
   const [permState, permAction, permPending] = useActionState(toggleUserPermissionAction, null);
-  const [codeState, codeAction, codePending] = useActionState(generateMemberAccessCodeAction, null);
+  const [codeState, codeAction, codePending] = useActionState(generateMemberAccessCodeForMemberAction, null);
+  const [revokeState, revokeAction, revokePending] = useActionState(revokeMemberAccessCodeAction, null);
+  const [statusState, statusAction, statusPending] = useActionState(getMemberInvitationStatusAction, null);
   const [showCode, setShowCode] = useState<string | null>(null);
+  const [accessStatus, setAccessStatus] = useState<string | null>(null);
+
+  const handleCopyCode = async (code: string) => {
+    try {
+      await navigator.clipboard.writeText(code);
+    } catch {
+      const textarea = document.createElement("textarea");
+      textarea.value = code;
+      textarea.setAttribute("readonly", "");
+      textarea.style.position = "absolute";
+      textarea.style.left = "-9999px";
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand("copy");
+      document.body.removeChild(textarea);
+    }
+  };
+
+  const registrationUrl = `${window.location.origin}/register?code=${showCode ?? ""}`;
+
+  const shareText = `DHZ Ružindol – Váš prihlasovací kód: ${showCode ?? ""}\nPlatnosť: ${(codeState?.ok ? (codeState as { data?: { expiresAt?: string } }).data?.expiresAt : undefined) ?? "neuvedená"}\nRegistrácia: ${registrationUrl}\nKód je jednorazový a nesmie sa zdieľať s inými osobami.`;
+
   return (
     <div
       role="dialog"
@@ -90,22 +117,68 @@ export function AdminMemberManager({
                 <dd className="text-gray-900">{member.email ?? "—"}</dd>
               </div>
               <div className="flex items-start gap-3">
-                <dt className="text-gray-500 font-medium">Stav</dt>
+                <dt className="text-gray-500 font-medium">Stav člena</dt>
                 <dd className="text-gray-900">{member.status}</dd>
               </div>
               <div className="flex items-start gap-3">
-                <dt className="text-gray-500 font-medium">Účet</dt>
+                <dt className="text-gray-500 font-medium">Ma účet</dt>
                 <dd className="text-gray-900">
-                  {member.has_account ? "Aktívny" : "Nemá účet"}
-                </dd>
-              </div>
-              <div className="flex items-start gap-3">
-                <dt className="text-gray-500 font-medium">Prístupový kód</dt>
-                <dd className="text-gray-900">
-                  {member.has_access_code ? "Nastavený" : "Nie je nastavený"}
+                  {member.has_account ? "Áno" : "Nie"}
                 </dd>
               </div>
             </dl>
+          </div>
+
+          {/* Stav prístupu */}
+          <div className="rounded-xl border border-gray-200 p-4">
+            <h3 className="text-sm font-semibold text-gray-900 mb-3">Stav prístupu</h3>
+            {accessStatus ? (
+              <dl className="grid gap-2 text-sm">
+                <div className="flex items-start gap-3">
+                  <dt className="text-gray-500 font-medium">Prístup</dt>
+                  <dd className="text-gray-900">
+                    {accessStatus === "no_account"
+                      ? "Bez účtu"
+                      : accessStatus === "invitation_pending"
+                        ? "Pozvánka vydaná"
+                        : accessStatus === "account_activated"
+                          ? "Účet aktívny"
+                          : "Účet bez pozvánky"}
+                  </dd>
+                </div>
+                {accessStatus === "invitation_pending" && (
+                  <div className="flex items-start gap-3">
+                    <dt className="text-gray-500 font-medium">Rola z pozvánky</dt>
+                    <dd className="text-gray-900">
+                      {(statusState?.data as { invitation_role?: string })?.invitation_role ??
+                        "—"}
+                    </dd>
+                  </div>
+                )}
+                {accessStatus === "invitation_pending" && (
+                  <div className="flex items-start gap-3">
+                    <dt className="text-gray-500 font-medium">Platnosť do</dt>
+                    <dd className="text-gray-900">
+                      {(statusState?.data as { invitation_expires_at?: string })
+                        ?.invitation_expires_at ?? "—"}
+                    </dd>
+                  </div>
+                )}
+                {accessStatus === "invitation_pending" && (
+                  <div className="flex items-start gap-3">
+                    <dt className="text-gray-500 font-medium">Stav kódu</dt>
+                    <dd className="text-gray-900 text-sm">
+                      <Badge tone={(statusState?.data as { invitation_status?: string })?.invitation_status === "active" ? "default" : "secondary"}>
+                        {(statusState?.data as { invitation_status?: string })?.invitation_status ??
+                          "—"}
+                      </Badge>
+                    </dd>
+                  </div>
+                )}
+              </dl>
+            ) : (
+              <p className="text-xs text-gray-400">Načítavanie stavu prístupu…</p>
+            )}
           </div>
 
           {/* Rola */}
@@ -114,12 +187,11 @@ export function AdminMemberManager({
               <SlidersHorizontal className="h-4 w-4 text-gray-400" />
               <h3 className="text-sm font-semibold text-gray-900">Rola</h3>
             </div>
-            {member.auth_user_id ? (
             <form action={roleAction} className="space-y-2">
-              <input type="hidden" name="user_id" value={member.auth_user_id} />
+              <input type="hidden" name="user_id" value={member.auth_user_id ?? ""} />
               <select
                 name="role_code"
-                defaultValue={member.roles[0] ?? ""}
+                defaultValue={member.roles[0] ?? "CLEN"}
                 className="w-full min-h-[44px] rounded-lg border border-gray-300 px-3 text-sm focus:ring-2 focus:ring-[#C62828] focus:border-transparent"
               >
                 <option value="">— bez role —</option>
@@ -137,11 +209,6 @@ export function AdminMemberManager({
                 {rolePending ? "Ukladám…" : "Uložiť rolu"}
               </button>
             </form>
-            ) : (
-              <p className="text-xs text-amber-700">
-                Tento člen zatiaľ nemá používateľský účet. Najprv ho treba bezpečne prepojiť.
-              </p>
-            )}
             {roleState?.message && !roleState?.ok && (
               <p className="mt-2 text-xs text-[#C62828]">{roleState.message}</p>
             )}
@@ -266,7 +333,8 @@ export function AdminMemberManager({
             )}
 
             <form action={codeAction} className="mt-3">
-              <input type="hidden" name="user_id" value={member.auth_user_id ?? ""} />
+              <input type="hidden" name="member_id" value={member.member_id} />
+              <input type="hidden" name="role_code" value={member.roles[0] ?? "CLEN"} />
               <button
                 type="submit"
                 disabled={codePending}

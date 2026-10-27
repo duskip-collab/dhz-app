@@ -63,7 +63,7 @@ export async function createTrainingAction(
     description: field(formData, "description"),
     target_group: targetGroupRaw as TrainingTargetGroup,
     start_time: field(formData, "start_time") ?? "",
-    end_time: field(formData, "end_time") ?? "",
+    end_time: field(formData, "end_time") ?? null,
     location: field(formData, "location"),
     trainer_id: field(formData, "trainer_id"),
   };
