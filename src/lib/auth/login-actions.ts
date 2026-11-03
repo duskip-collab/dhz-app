@@ -47,7 +47,7 @@ export async function checkEmailLoginAllowed(email: string): Promise<LoginCheckR
 export async function resolveAccessCodeEmail(
   code: string
 ): Promise<{ ok: true; email: string } | { ok: false; message: string }> {
-  const normalized = code.trim();
+  const normalized = code.trim().toUpperCase();
   if (normalized.length < 6) {
     return { ok: false, message: "Neplatný prístupový kód." };
   }

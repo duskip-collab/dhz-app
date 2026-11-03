@@ -85,7 +85,7 @@ export interface CompetitionLineup {
  * Kompletný profil člena so všetkými sekciami
  */
 export interface MemberProfile {
-  member: Member;
+  member: MemberProfileMember;
   guardians: MemberGuardian[];
   gear: GearAssignment[];
   training: TrainingAttendance[];
@@ -93,6 +93,34 @@ export interface MemberProfile {
   courses: MemberCourse[];
   driving_licenses: MemberDrivingLicense[];
 }
+
+type MemberProfileBasic = Pick<
+  Member,
+  | "id"
+  | "member_number"
+  | "first_name"
+  | "last_name"
+  | "title"
+  | "rank"
+  | "position"
+  | "is_committee_member"
+  | "membership_type"
+  | "status"
+  | "joined_at"
+  | "left_at"
+  | "notes"
+  | "created_at"
+  | "updated_at"
+  | "auth_user_id"
+  | "photo_path"
+>;
+
+type MemberProfileContactDetails = Pick<
+  Member,
+  "phone" | "email" | "birth_date" | "address"
+>;
+
+type MemberProfileMember = MemberProfileBasic & MemberProfileContactDetails;
 
 // =============================================================================
 // NAČÍTANIE PROFILU – AGREGÁCIA VŠETKÝCH DÁT
@@ -128,8 +156,18 @@ export async function getMemberProfile(memberId: string): Promise<MemberProfile>
   const supabase = await createClient();
 
   // Paralelné načítanie všetkých sekcií
-  const [member, guardians, gear, training, competitions, courses, driving_licenses] = await Promise.all([
+  const [
+    memberBasic,
+    contactDetails,
+    guardians,
+    gear,
+    training,
+    competitions,
+    courses,
+    driving_licenses,
+  ] = await Promise.all([
     fetchMemberBasic(supabase, memberId),
+    fetchMemberContactDetails(supabase, memberId),
     fetchMemberGuardians(supabase, memberId),
     fetchMemberGear(supabase, memberId),
     fetchMemberTraining(supabase, memberId),
@@ -139,7 +177,7 @@ export async function getMemberProfile(memberId: string): Promise<MemberProfile>
   ]);
 
   return {
-    member,
+    member: { ...memberBasic, ...contactDetails },
     guardians,
     gear,
     training,
@@ -159,10 +197,12 @@ export async function getMemberProfile(memberId: string): Promise<MemberProfile>
 async function fetchMemberBasic(
   supabase: SupabaseClient,
   memberId: string
-): Promise<Member> {
+): Promise<MemberProfileBasic> {
   const { data, error } = await supabase
     .from("members")
-    .select("*")
+    .select(
+      "id, member_number, first_name, last_name, title, rank, position, is_committee_member, membership_type, status, joined_at, left_at, notes, created_at, updated_at, auth_user_id, photo_path"
+    )
     .eq("id", memberId)
     .single();
 
@@ -174,7 +214,31 @@ async function fetchMemberBasic(
     throw createAuthError(500, "Chyba pri načítavaní údajov člena.");
   }
 
-  return data as unknown as Member;
+  return data;
+}
+
+/**
+ * fetchMemberContactDetails – citlivé kontaktné údaje pre autorizovaný profil
+ */
+async function fetchMemberContactDetails(
+  supabase: SupabaseClient,
+  memberId: string
+): Promise<MemberProfileContactDetails> {
+  const { data, error } = await supabase
+    .from("members")
+    .select("phone, email, birth_date, address")
+    .eq("id", memberId)
+    .single();
+
+  if (error) {
+    if (error.code === "PGRST116") {
+      throw createAuthError(404, "Člen neexistuje.");
+    }
+    console.error("[fetchMemberContactDetails]", error);
+    throw createAuthError(500, "Chyba pri načítavaní kontaktných údajov člena.");
+  }
+
+  return data;
 }
 
 /**

@@ -208,10 +208,14 @@ export interface Database {
           first_name: string;
           last_name: string;
           title: string | null;
+          rank: string | null;
+          position: string | null;
+          is_committee_member: boolean;
           phone: string | null;
           email: string | null;
           birth_date: string | null;
           address: string | null;
+          health_insurance: string | null;
           membership_type: "adult" | "youth" | "preparatory" | "dorast";
           status: "active" | "inactive";
           joined_at: string;
@@ -230,10 +234,14 @@ export interface Database {
           first_name?: string;
           last_name?: string;
           title?: string | null;
+          rank?: string | null;
+          position?: string | null;
+          is_committee_member?: boolean;
           phone?: string | null;
           email?: string | null;
           birth_date?: string | null;
           address?: string | null;
+          health_insurance?: string | null;
           membership_type?: "adult" | "youth" | "preparatory" | "dorast";
           status?: "active" | "inactive";
           joined_at?: string;
@@ -252,10 +260,14 @@ export interface Database {
           first_name?: string;
           last_name?: string;
           title?: string | null;
+          rank?: string | null;
+          position?: string | null;
+          is_committee_member?: boolean;
           phone?: string | null;
           email?: string | null;
           birth_date?: string | null;
           address?: string | null;
+          health_insurance?: string | null;
           membership_type?: "adult" | "youth" | "preparatory" | "dorast";
           status?: "active" | "inactive";
           joined_at?: string;
@@ -1492,5 +1504,4 @@ export type FinanceTransactionAttachmentRow =
   Database["public"]["Tables"]["finance_transaction_attachments"]["Row"];
 export type FinanceTransactionAttachmentInsert =
   Database["public"]["Tables"]["finance_transaction_attachments"]["Insert"];
-
 

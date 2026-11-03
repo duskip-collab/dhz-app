@@ -27,7 +27,8 @@ export function CodeLoginForm({
     setLoading(true);
     setError(null);
     try {
-      const resolved = await resolveCodeAction(code.trim());
+      const normalizedCode = code.trim().toUpperCase();
+  const resolved = await resolveCodeAction(normalizedCode);
       if (!resolved.ok) {
         setError(resolved.message || "Neplatný prístupový kód.");
         return;
@@ -35,7 +36,7 @@ export function CodeLoginForm({
       const supabase = createClient();
       const { error: authError } = await supabase.auth.signInWithPassword({
         email: resolved.email,
-        password: code.trim(),
+        password: normalizedCode,
       });
       if (authError) throw authError;
       router.push("/dashboard");
