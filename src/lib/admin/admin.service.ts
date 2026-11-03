@@ -325,16 +325,46 @@ export async function generateMemberAccessCode(userId: string): Promise<string> 
 export async function generateMemberAccessCodeForMember(
   memberId: string,
   roleCode: AppRole,
-): Promise<{ code: string; invitationId: string; expiresAt: string }> {
+): Promise<
+  | { kind: "login"; code: string }
+  | { kind: "invitation"; code: string; invitationId: string; expiresAt: string }
+> {
   const ctx = await requireAuthenticated();
   assertAdminGate(ctx);
+
+  const supabase = await createClient();
+  const { data: member, error: memberError } = await supabase
+    .from("members")
+    .select("auth_user_id")
+    .eq("id", memberId)
+    .maybeSingle();
+
+  if (memberError) {
+    console.error("[generateMemberAccessCodeForMember] member lookup error:", memberError);
+    throw createAuthError(500, "Chyba pri načítaní člena.");
+  }
+  if (!member) throw createAuthError(404, "Člen sa nenašiel.");
+
+  if (member.auth_user_id) {
+    const code = crypto.randomUUID().slice(-6).toUpperCase();
+    const { error } = await supabase.rpc("set_member_access_code", {
+      p_user_id: member.auth_user_id,
+      p_code: code,
+    });
+    if (error) {
+      console.error("[generateMemberAccessCodeForMember] access code RPC error:", error);
+      throw createAuthError(500, "Chyba pri generovaní prihlasovacieho kódu.");
+    }
+
+    return { kind: "login", code };
+  }
+
   if (!isAppRole(roleCode)) {
     throw createAuthError(400, "Neplatný kód role.");
   }
-
   const created = await createInvitation({
     role: roleCode,
-    memberId: memberId ?? null,
+    memberId,
     maxUses: 1,
     validDays: 14,
     notes: "Prístupový kód pre člena (K16.0)",
@@ -349,6 +379,7 @@ export async function generateMemberAccessCodeForMember(
   });
 
   return {
+    kind: "invitation",
     code: created.code,
     invitationId: created.invitation.id,
     expiresAt: created.invitation.expires_at,

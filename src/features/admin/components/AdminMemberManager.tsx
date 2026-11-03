@@ -1,19 +1,15 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { X, Share2, SlidersHorizontal, Mail, Phone, Copy, PhoneOff, MessageCircle } from "lucide-react";
+import { X, Share2, SlidersHorizontal, Mail, Phone } from "lucide-react";
 import {
   setUserRoleAction,
   toggleUserPermissionAction,
-  generateMemberAccessCodeAction,
   generateMemberAccessCodeForMemberAction,
-  revokeMemberAccessCodeAction,
   getMemberInvitationStatusAction,
 } from "@/app/(app)/admin/actions";
 import type { AdminMemberRow } from "@/lib/admin/admin.service";
 import { ROLE_LABELS } from "@/lib/auth/roles";
-import { Button } from "@/components/ui/Button";
-import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 
 const PERMISSION_LABELS: Record<string, string> = {
@@ -42,32 +38,39 @@ export function AdminMemberManager({
   onClose: () => void;
 }) {
   const [roleState, roleAction, rolePending] = useActionState(setUserRoleAction, null);
-  const [permState, permAction, permPending] = useActionState(toggleUserPermissionAction, null);
+  const [permState, permAction] = useActionState(toggleUserPermissionAction, null);
   const [codeState, codeAction, codePending] = useActionState(generateMemberAccessCodeForMemberAction, null);
-  const [revokeState, revokeAction, revokePending] = useActionState(revokeMemberAccessCodeAction, null);
-  const [statusState, statusAction, statusPending] = useActionState(getMemberInvitationStatusAction, null);
+  const [statusState] = useActionState(getMemberInvitationStatusAction, null);
   const [showCode, setShowCode] = useState<string | null>(null);
-  const [accessStatus, setAccessStatus] = useState<string | null>(null);
+  const accessStatus: string | null = null;
+  const generatedCode = codeState?.ok ? codeState.data?.code ?? null : null;
+  const generatedCodeKind = codeState?.ok ? codeState.data?.kind : undefined;
+  const visibleCode = showCode === generatedCode ? showCode : null;
 
-  const handleCopyCode = async (code: string) => {
+  const handleShareCode = async () => {
+    if (!visibleCode) return;
+    const isInvitation = generatedCodeKind === "invitation";
+    const shareUrl = new URL(isInvitation ? "/register" : "/login", window.location.origin);
+    if (isInvitation) shareUrl.searchParams.set("code", visibleCode);
+    const text = isInvitation
+      ? `DHZ Digital OS – registračný pozývací kód: ${visibleCode}\nRegistrácia: ${shareUrl.toString()}\nKód je jednorazový a platí 14 dní.`
+      : `DHZ Digital OS – prihlasovací kód: ${visibleCode}\nPrihláste sa v aplikácii cez možnosť „Prístupový kód“: ${shareUrl.toString()}`;
+
     try {
-      await navigator.clipboard.writeText(code);
-    } catch {
-      const textarea = document.createElement("textarea");
-      textarea.value = code;
-      textarea.setAttribute("readonly", "");
-      textarea.style.position = "absolute";
-      textarea.style.left = "-9999px";
-      document.body.appendChild(textarea);
-      textarea.select();
-      document.execCommand("copy");
-      document.body.removeChild(textarea);
+      if (navigator.share) {
+        await navigator.share({
+          title: isInvitation ? "DHZ Digital OS – Pozývací kód" : "DHZ Digital OS – Prihlasovací kód",
+          text,
+          url: shareUrl.toString(),
+        });
+        return;
+      }
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") return;
     }
+
+    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank", "noopener,noreferrer");
   };
-
-  const registrationUrl = `${window.location.origin}/register?code=${showCode ?? ""}`;
-
-  const shareText = `DHZ Ružindol – Váš prihlasovací kód: ${showCode ?? ""}\nPlatnosť: ${(codeState?.ok ? (codeState as { data?: { expiresAt?: string } }).data?.expiresAt : undefined) ?? "neuvedená"}\nRegistrácia: ${registrationUrl}\nKód je jednorazový a nesmie sa zdieľať s inými osobami.`;
 
   return (
     <div
@@ -283,38 +286,23 @@ export function AdminMemberManager({
               <h3 className="text-sm font-semibold text-gray-900">Prístupový kód</h3>
             </div>
             <p className="text-xs text-gray-500 mb-3">
-              Kód slúži ako heslo pre prihlásenie člena bez e-mailu v profile.
+              {member.has_account
+                ? "Prihlasovací kód slúži ako heslo účtu. Nový kód nahradí predchádzajúci."
+                : "Člen zatiaľ nemá účet. Vygenerujte jednorazový kód na registráciu."}
             </p>
 
-            {showCode ? (
+            {visibleCode ? (
               <div className="space-y-2">
                 <div className="flex items-center gap-2">
                   <input
                     type="text"
-                    value={showCode}
+                    value={visibleCode}
                     readOnly
                     className="flex-1 min-h-[44px] rounded-lg border border-gray-300 bg-gray-50 px-3 text-sm font-mono text-center text-[#C62828]"
                   />
                   <button
                     type="button"
-                    onClick={() => {
-                      const text = `DHZ Digital OS – Váš prístupový kód: ${showCode}`;
-                      try {
-                        if (navigator.share) {
-                          navigator.share({
-                            title: "DHZ Digital OS – Prístupový kód",
-                            text,
-                            url: window.location.origin,
-                          });
-                        } else {
-                          const waUrl = `https://wa.me/?text=${encodeURIComponent(text)}`;
-                          window.open(waUrl, "_blank");
-                        }
-                      } catch {
-                        const waUrl = `https://wa.me/?text=${encodeURIComponent(text)}`;
-                        window.open(waUrl, "_blank");
-                      }
-                    }}
+                    onClick={handleShareCode}
                     className="flex min-h-[44px] items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-700 transition hover:bg-gray-50"
                   >
                     <Share2 className="h-4 w-4" /> Zdieľať
@@ -326,10 +314,12 @@ export function AdminMemberManager({
               </div>
             ) : null}
 
-            {member.has_access_code ? (
-              <p className="text-xs text-green-700">Člen má nastavený prístupový kód.</p>
+            {member.has_account && member.has_access_code ? (
+              <p className="text-xs text-green-700">Člen má nastavený prihlasovací kód.</p>
+            ) : member.has_account ? (
+              <p className="text-xs text-gray-400">Člen zatiaľ nemá prihlasovací kód.</p>
             ) : (
-              <p className="text-xs text-gray-400">Člen zatiaľ nemá prístupový kód.</p>
+              <p className="text-xs text-gray-400">Člen nemá účet; použije registračný kód.</p>
             )}
 
             <form action={codeAction} className="mt-3">
@@ -339,29 +329,31 @@ export function AdminMemberManager({
                 type="submit"
                 disabled={codePending}
                 className={`inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg px-4 text-xs font-semibold transition ${
-                  member.has_access_code
-                    ? "bg-gray-200 text-gray-600"
-                    : "bg-[#C62828] text-white hover:bg-[#8E0000]"
+                  "bg-[#C62828] text-white hover:bg-[#8E0000]"
                 } disabled:opacity-50`}
               >
                 {codePending
                   ? "Generujem…"
-                  : member.has_access_code
-                    ? "Kód existuje"
-                    : "Vygenerovať kód"}
+                  : member.has_account
+                    ? member.has_access_code
+                      ? "Vygenerovať nový prihlasovací kód"
+                      : "Vygenerovať prihlasovací kód"
+                    : "Vygenerovať registračný kód"}
               </button>
             </form>
 
             {codeState?.message && !codeState?.ok && (
               <p className="mt-2 text-xs text-[#C62828]">{codeState.message}</p>
             )}
-            {codeState?.ok && !showCode && (
-              <p className="mt-2 text-xs text-green-700 cursor-pointer underline underline-offset-4 hover:text-green-600" onClick={() => {
-                const match = codeState?.message?.match(/([A-Z0-9]{6,})/);
-                if (match) setShowCode(match[1]);
-              }}>
+            {codeState?.ok && !visibleCode && (
+              <button
+                type="button"
+                className="mt-2 text-xs text-green-700 underline underline-offset-4 hover:text-green-600"
+                onClick={() => setShowCode(generatedCode)}
+                disabled={!generatedCode}
+              >
                 Kód vygenerovaný – kliknite pre zobrazenie a zdieľanie
-              </p>
+              </button>
             )}
           </div>
         </div>

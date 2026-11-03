@@ -1,7 +1,6 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 import {
   setUserRole,
   toggleUserPermission,
@@ -9,14 +8,28 @@ import {
   generateMemberAccessCodeForMember,
   revokeMemberAccessForMember,
   getMemberInvitationStatus,
-  type AdminMemberRow,
 } from "@/lib/admin/admin.service";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { getAuthContext } from "@/lib/auth/server";
 import { isAppRole } from "@/lib/auth/roles";
 
 type AdminActionState =
-  | { ok: true; message?: string; data?: unknown }
+  | {
+      ok: true;
+      message?: string;
+      data?: {
+        kind?: "login" | "invitation";
+        code?: string;
+        invitationId?: string;
+        expiresAt?: string;
+        hasAccount?: boolean;
+        hasActiveInvitation?: boolean;
+        invitationStatus?: string | null;
+        invitationRole?: string | null;
+        invitationExpiresAt?: string | null;
+        accessStatus?: string;
+      };
+    }
   | { ok: false; errors: Record<string, string>; message: string };
 
 function fail(message: string, errors: Record<string, string> = {}): AdminActionState {
@@ -139,8 +152,11 @@ export async function generateMemberAccessCodeForMemberAction(
     revalidatePath("/admin");
     return {
       ok: true,
-      message: `Prístupový kód: ${result.code}`,
-      data: { code: result.code, invitationId: result.invitationId, expiresAt: result.expiresAt },
+      message:
+        result.kind === "login"
+          ? "Prihlasovací kód bol vygenerovaný."
+          : "Registračný pozývací kód bol vygenerovaný.",
+      data: result,
     };
   } catch (e) {
     return fail(statusMessage(e, "Chyba pri generovaní prístupového kódu."));
