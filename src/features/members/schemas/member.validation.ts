@@ -262,6 +262,7 @@ export interface MemberFormValues {
   status: MemberStatus;
   joined_at: string;
   notes: string;
+  health_insurance: string;
 }
 
 /** Row z FormData (po field() helperi – reťazec alebo null). */

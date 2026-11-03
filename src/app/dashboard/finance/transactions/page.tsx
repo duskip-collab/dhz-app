@@ -36,21 +36,23 @@ export default async function FinanceTransactionsPage({
   const type = pick(searchParams.type);
 
   const supabase = await createClient();
-  const { data: txs } = await supabase
-    .from("finance_transactions")
-    .select("id,account_id,category_id,type,status,amount_minor,transaction_date,document_number,description")
-    .order("transaction_date", { ascending: false })
-    .limit(200);
-  const { data: accs } = await supabase
-    .from("finance_accounts")
-    .select("id,name")
-    .eq("is_active", true)
-    .order("name");
-  const { data: cats } = await supabase
-    .from("finance_categories")
-    .select("id,name,code")
-    .eq("is_active", true)
-    .order("sort_order");
+  const [{ data: txs }, { data: accs }, { data: cats }] = await Promise.all([
+    supabase
+      .from("finance_transactions")
+      .select("id,account_id,category_id,type,status,amount_minor,transaction_date,document_number,description")
+      .order("transaction_date", { ascending: false })
+      .limit(200),
+    supabase
+      .from("finance_accounts")
+      .select("id,name")
+      .eq("is_active", true)
+      .order("name"),
+    supabase
+      .from("finance_categories")
+      .select("id,name,code")
+      .eq("is_active", true)
+      .order("sort_order"),
+  ]);
 
   const rows = ((txs ?? []) as TxRow[]).filter((t) => {
     if (accountId && t.account_id !== accountId) return false;

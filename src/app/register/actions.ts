@@ -1,5 +1,4 @@
 // K17.5 – Server Actions pre registračný tok s pozývacím kódom.
-//
 // BEZPEČNOSŤ:
 //  - Overenie kódu je bez spotrebovania (anon RPC verify_invitation_code).
 //  - Uplatnenie kódu vyžaduje prihláseného používateľa – server používa
@@ -23,9 +22,6 @@ export type AcceptInvitationState =
 
 const INVALID_CODE_MESSAGE = "Pozývací kód nie je platný.";
 
-/**
- * verifyInvitationCodeAction – overí kód bez spotrebovania.
- */
 export async function verifyInvitationCodeAction(code: string): Promise<VerifyCodeState> {
   const normalized = (code ?? "").trim();
   if (!normalized) {
@@ -34,7 +30,6 @@ export async function verifyInvitationCodeAction(code: string): Promise<VerifyCo
 
   const verification = await verifyInvitationCode(normalized);
   if (!verification || !verification.is_valid) {
-    // Neodhalujeme, či kód existoval, bol expirovaný alebo zrušený.
     return { ok: false, message: INVALID_CODE_MESSAGE };
   }
 
@@ -46,11 +41,6 @@ export async function verifyInvitationCodeAction(code: string): Promise<VerifyCo
   };
 }
 
-/**
- * acceptInvitationAction – atomicky uplatní kód a pridá rolu používateľovi.
- *
- * Vyžaduje existujúcu session (po vytvorení účtu a prihlásení).
- */
 export async function acceptInvitationAction(code: string): Promise<AcceptInvitationState> {
   const normalized = (code ?? "").trim();
   if (!normalized) {
@@ -58,16 +48,12 @@ export async function acceptInvitationAction(code: string): Promise<AcceptInvita
   }
 
   const supabase = await createClient();
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser();
+  const { data: { user }, error: userError } = await supabase.auth.getUser();
 
   if (userError || !user) {
     return {
       ok: false,
-      message:
-        "Na uplatnenie kódu musíte byť prihlásení. Potvrďte e-mail a prihláste sa, potom kód uplatníte.",
+      message: "Na uplatnenie kódu musíte byť prihlásený. Potvrďte e-mail a prihláste sa, potom kód uplatníte.",
     };
   }
 
@@ -77,8 +63,7 @@ export async function acceptInvitationAction(code: string): Promise<AcceptInvita
     if (result.error === "code_unusable") {
       return {
         ok: false,
-        message:
-          "Tento pozývací kód už bol použitý, expiroval alebo bol zrušený. Otočte sa na administrátora.",
+        message: "Tento pozývací kód už bol použitý, expiroval alebo bol zrušený. Otočte sa na administrátora.",
       };
     }
     return { ok: false, message: INVALID_CODE_MESSAGE };

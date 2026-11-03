@@ -7,7 +7,7 @@ import {
   acceptInvitationAction,
   verifyInvitationCodeAction,
   type VerifyCodeState,
-} from "@/app/(auth)/register/actions";
+} from "@/app/register/actions";
 import { formatInvitationCodeInput } from "@/lib/auth/invitations.share";
 import { createClient } from "@/lib/supabase/client";
 
@@ -83,7 +83,7 @@ export function RegisterForm({ initialCode = "" }: { initialCode?: string }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [passwordConfirm, setPasswordConfirm] = useState("");
-  const [code, setCode] = useState(initialCode);
+  const [code, setCode] = useState(() => formatInvitationCodeInput(initialCode));
 
   const [verification, setVerification] = useState<VerifyCodeState | null>(null);
   const [verifying, setVerifying] = useState(false);
@@ -91,7 +91,11 @@ export function RegisterForm({ initialCode = "" }: { initialCode?: string }) {
   const [claiming, setClaiming] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
-  const [hasSession, setHasSession] = useState(false);
+  const [sessionStatus, setSessionStatus] = useState<
+    "loading" | "signed-out" | "signed-in" | "error"
+  >("loading");
+  const [sessionCheckAttempt, setSessionCheckAttempt] = useState(0);
+  const [sessionError, setSessionError] = useState<string | null>(null);
 
   const verifyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -105,22 +109,36 @@ export function RegisterForm({ initialCode = "" }: { initialCode?: string }) {
     window.history.replaceState({}, "", url.toString());
   }, [initialCode]);
 
-  // Detekcia existujúcej session (uplatnenie kódu po prihlásení).
+  // Session is required to claim an invitation and can change after email confirmation.
   useEffect(() => {
     let cancelled = false;
+    let unsubscribe: (() => void) | undefined;
+
     void (async () => {
       try {
         const supabase = createClient();
-        const { data } = await supabase.auth.getSession();
-        if (!cancelled) setHasSession(Boolean(data.session));
-      } catch {
-        if (!cancelled) setHasSession(false);
+        const { data, error: sessionFetchError } = await supabase.auth.getSession();
+        if (sessionFetchError) throw sessionFetchError;
+        if (cancelled) return;
+        setSessionStatus(data.session ? "signed-in" : "signed-out");
+
+        const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
+          if (!cancelled) setSessionStatus(session ? "signed-in" : "signed-out");
+        });
+        unsubscribe = () => authListener.subscription.unsubscribe();
+      } catch (sessionError) {
+        if (!cancelled) {
+          console.error("[RegisterForm] Session check failed:", sessionError);
+          setSessionError("Nepodarilo sa overiť prihlásenie. Skúste to znova.");
+          setSessionStatus("error");
+        }
       }
     })();
     return () => {
       cancelled = true;
+      unsubscribe?.();
     };
-  }, []);
+  }, [sessionCheckAttempt]);
 
   const runVerification = useCallback(async (value: string) => {
     const trimmed = value.trim();
@@ -204,10 +222,20 @@ export function RegisterForm({ initialCode = "" }: { initialCode?: string }) {
 
     setSubmitting(true);
     try {
+      const codeVerification = await verifyInvitationCodeAction(code);
+      setVerification(codeVerification);
+      if (!codeVerification.ok) {
+        setError(codeVerification.message);
+        return;
+      }
+
       const supabase = createClient();
       const { data, error: signUpError } = await supabase.auth.signUp({
         email: normalizedEmail,
         password,
+        options: {
+          emailRedirectTo: new URL("/register", window.location.origin).toString(),
+        },
       });
 
       if (signUpError) {
@@ -222,7 +250,7 @@ export function RegisterForm({ initialCode = "" }: { initialCode?: string }) {
       // Session existuje iba pri vypnutom potvrdzovaní e-mailu.
       if (!data.session) {
         setInfo(
-          "Účet bol vytvorený. Potvrďte e-mail a prihláste sa. Následne sa opätovne otvorte tento odkaz s pozývacím kódom – kód vám priradí rolu.",
+          "Účet bol vytvorený. Potvrďte e-mail cez odkaz, ktorý vám pošleme. Potom sa prihláste a na tejto stránke znovu zadajte pozývací kód, aby sa vám priradila rola.",
         );
         return;
       }
@@ -244,7 +272,29 @@ export function RegisterForm({ initialCode = "" }: { initialCode?: string }) {
 
   return (
     <div className="space-y-5">
-      {hasSession ? (
+      {sessionStatus === "loading" ? (
+        <p role="status" className="flex items-center justify-center gap-2 py-6 text-sm text-gray-500">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Overujem prihlásenie…
+        </p>
+      ) : sessionStatus === "error" ? (
+        <div role="alert" className="space-y-3">
+          <p className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-[#C62828]">
+            {sessionError ?? "Nepodarilo sa overiť prihlásenie."}
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              setSessionError(null);
+              setSessionStatus("loading");
+              setSessionCheckAttempt((attempt) => attempt + 1);
+            }}
+            className="w-full text-sm font-semibold text-[#C62828] hover:underline"
+          >
+            Skúsiť znova
+          </button>
+        </div>
+      ) : sessionStatus === "signed-in" ? (
         <form onSubmit={handleClaim} className="space-y-5">
           <div>
             <h2 className="text-base font-bold text-gray-900">Uplatniť pozývací kód</h2>
@@ -406,4 +456,3 @@ export function RegisterForm({ initialCode = "" }: { initialCode?: string }) {
     </div>
   );
 }
-

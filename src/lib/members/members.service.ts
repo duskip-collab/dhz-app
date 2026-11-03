@@ -634,7 +634,7 @@ export async function deleteMember(memberId: string): Promise<{ id: string }> {
  */
 export async function getMemberPreview(
   memberId: string
-): Promise<Omit<Member, "phone" | "email" | "birth_date" | "address">> {
+): Promise<Omit<Member, "phone" | "email" | "birth_date" | "address" | "health_insurance">> {
   const member = await getMember(memberId);
   return {
     id: member.id,

@@ -21,12 +21,12 @@ const dateFmt = new Intl.DateTimeFormat("sk-SK", {
 });
 const timeFmt = new Intl.DateTimeFormat("sk-SK", { hour: "2-digit", minute: "2-digit" });
 
-function formatRange(startIso: string, endIso: string): string {
+function formatRange(startIso: string, endIso: string | null): string {
   const start = new Date(startIso);
-  const end = new Date(endIso);
   if (Number.isNaN(start.getTime())) return "—";
   const startTime = timeFmt.format(start);
-  const endTime = Number.isNaN(end.getTime()) ? "" : ` – ${timeFmt.format(end)}`;
+  const end = endIso ? new Date(endIso) : null;
+  const endTime = !end || Number.isNaN(end.getTime()) ? "" : ` – ${timeFmt.format(end)}`;
   return `${dateFmt.format(start)} · ${startTime}${endTime}`;
 }
 

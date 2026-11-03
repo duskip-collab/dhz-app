@@ -146,127 +146,113 @@ export default async function DashboardPage() {
   const canViewVehicles = hasPermission(ctx.permissions, PERMISSIONS.VEHICLE_VIEW);
   const canViewCalendar = hasPermission(ctx.permissions, PERMISSIONS.CALENDAR_VIEW);
 
-  // --- KPI: Výjazdy (celkom / za tento rok / za mesiac) ---
-  const stats = {
-    incidents: 0,
-    incidentsYear: 0,
-    incidentsMonth: 0,
-    membersTotal: 0,
-    membersActive: 0,
-    financeBalance: 0,
+  const withFallback = async <T,>(
+    section: string,
+    request: Promise<T>,
+    fallback: T,
+  ): Promise<T> => {
+    try {
+      return await request;
+    } catch (error) {
+      console.error(`[DashboardPage] ${section} failed:`, error);
+      return fallback;
+    }
   };
-  if (canViewIncidents) {
-    try {
-      const list = await getIncidents({ limit: 1000 });
-      const now = new Date();
-      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-      stats.incidents = list.length;
-      stats.incidentsYear = list.filter(
-        (i) => new Date(i.reported_at).getFullYear() === now.getFullYear(),
-      ).length;
-      stats.incidentsMonth = list.filter((i) => new Date(i.reported_at) >= monthStart).length;
-    } catch {
-      // nekritické – KPI ostane na 0
-    }
-  }
 
-  // --- KPI: Členovia (aktívni / celkom) ---
-  if (canViewMembers) {
-    try {
-      const all = await listMembers({});
-      stats.membersTotal = all.length;
-      stats.membersActive = all.filter((m) => m.status === "active").length;
-    } catch {
-      // nekritické
-    }
-  }
+  const [incidents, members, financeBalance, faults, expiringVehicleCount, inspections, expiringCourses, calendarEvents] =
+    await Promise.all([
+      canViewIncidents
+        ? withFallback("incidents", getIncidents({ limit: 1000 }), [])
+        : Promise.resolve([]),
+      canViewMembers ? withFallback("members", listMembers({}), []) : Promise.resolve([]),
+      canSeeFinance
+        ? withFallback(
+            "finance balances",
+            (async () => {
+              const supabase = await createClient();
+              const { data, error } = await supabase
+                .from("finance_account_balances")
+                .select("current_balance_minor");
+              if (error) throw error;
+              const totalMinor = (data ?? []).reduce(
+                (sum, row) =>
+                  sum +
+                  Number(
+                    (row as { current_balance_minor?: number }).current_balance_minor ?? 0,
+                  ),
+                0,
+              );
+              return totalMinor / 100;
+            })(),
+            0,
+          )
+        : Promise.resolve(0),
+      canViewFaults
+        ? withFallback("open faults", getFaults({ open_only: true, limit: 50 }), [])
+        : Promise.resolve([]),
+      canViewVehicles
+        ? withFallback("expiring vehicle documents", getExpiringVehicleCount(), 0)
+        : Promise.resolve(0),
+      canViewInspections
+        ? withFallback("upcoming inspections", getUpcomingInspections(30), [])
+        : Promise.resolve([]),
+      withFallback("expiring courses", getExpiringCourses(30), []),
+      canViewCalendar
+        ? withFallback("calendar events", getUnifiedCalendarEvents(), [])
+        : Promise.resolve([]),
+    ]);
 
-  // --- KPI: Stav pokladne a účtu ---
-  if (canSeeFinance) {
-    try {
-      const supabase = await createClient();
-      const { data } = await supabase
-        .from("finance_account_balances")
-        .select("current_balance_minor");
-      const totalMinor = (data ?? []).reduce(
-        (sum, r) => sum + Number((r as { current_balance_minor?: number }).current_balance_minor ?? 0),
-        0,
-      );
-      stats.financeBalance = totalMinor / 100;
-    } catch {
-      // nekritické
-    }
-  }
+  const now = new Date();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const stats = {
+    incidents: incidents.length,
+    incidentsYear: incidents.filter(
+      (incident) => new Date(incident.reported_at).getFullYear() === now.getFullYear(),
+    ).length,
+    incidentsMonth: incidents.filter(
+      (incident) => new Date(incident.reported_at) >= monthStart,
+    ).length,
+    membersTotal: members.length,
+    membersActive: members.filter((member) => member.status === "active").length,
+    financeBalance,
+  };
 
-  // --- Upozornenia: aktívne poruchy ---
   const alerts: AlertItem[] = [];
-  if (canViewFaults) {
-    try {
-      const faults = await getFaults({ open_only: true, limit: 50 });
-      if (faults.length > 0) {
-        alerts.push({
-          type: "fault",
-          title: "Aktívne poruchy techniky",
-          description: "Nevyriešené poruchy vyžadujú opravu alebo pozornosť.",
-          count: faults.length,
-          href: "/faults",
-        });
-      }
-    } catch {
-      // nekritické
-    }
+  if (faults.length > 0) {
+    alerts.push({
+      type: "fault",
+      title: "Aktívne poruchy techniky",
+      description: "Nevyriešené poruchy vyžadujú opravu alebo pozornosť.",
+      count: faults.length,
+      href: "/faults",
+    });
   }
-
-  // --- Upozornenia: expirácie STK / EK vozidiel (do 30 dní) ---
-  if (canViewVehicles) {
-    try {
-      const expiringCount = await getExpiringVehicleCount();
-      if (expiringCount > 0) {
-        alerts.push({
-          type: "expiry",
-          title: "Končiace STK / EK vozidiel",
-          description: "Termín platnosti končí do 30 dní.",
-          count: expiringCount,
-          href: "/vehicles",
-        });
-      }
-    } catch {
-      // nekritické
-    }
+  if (expiringVehicleCount > 0) {
+    alerts.push({
+      type: "expiry",
+      title: "Končiace STK / EK vozidiel",
+      description: "Termín platnosti končí do 30 dní.",
+      count: expiringVehicleCount,
+      href: "/vehicles",
+    });
   }
-
-  // --- Upozornenia: blížiace sa revízie a servisy (do 30 dní) ---
-  if (canViewInspections) {
-    try {
-      const inspections = await getUpcomingInspections(30);
-      if (inspections.length > 0) {
-        alerts.push({
-          type: "expiry",
-          title: "Blížiace sa revízie a servisy",
-          description: "Plánované kontroly a servisné prehliadky do 30 dní.",
-          count: inspections.length,
-          href: "/inspections",
-        });
-      }
-    } catch {
-      // nekritické
-    }
+  if (inspections.length > 0) {
+    alerts.push({
+      type: "expiry",
+      title: "Blížiace sa revízie a servisy",
+      description: "Plánované kontroly a servisné prehliadky do 30 dní.",
+      count: inspections.length,
+      href: "/inspections",
+    });
   }
-
-  // --- Upozornenia: končiaca platnosť kurzov členov (do 30 dní) ---
-  try {
-    const expiringCourses = await getExpiringCourses(30);
-    if (expiringCourses.length > 0) {
-      alerts.push({
-        type: "expiry",
-        title: "Končiaca platnosť kurzov členov",
-        description: "Kurzy a certifikácie končiace do 30 dní.",
-        count: expiringCourses.length,
-        href: "/courses",
-      });
-    }
-  } catch {
-    // nekritické
+  if (expiringCourses.length > 0) {
+    alerts.push({
+      type: "expiry",
+      title: "Končiaca platnosť kurzov členov",
+      description: "Kurzy a certifikácie končiace do 30 dní.",
+      count: expiringCourses.length,
+      href: "/courses",
+    });
   }
 
   // --- Najbližšie nadchádzajúce udalosti z kalendára ---
@@ -284,23 +270,15 @@ export default async function DashboardPage() {
   };
   const startOfToday = new Date();
   startOfToday.setHours(0, 0, 0, 0);
-  let upcoming: EventItem[] = [];
-  if (canViewCalendar) {
-    try {
-      const events = await getUnifiedCalendarEvents();
-      upcoming = events
-        .filter((e) => new Date(e.start_at) >= startOfToday)
-        .slice(0, 6)
-        .map((e) => ({
-          title: e.title,
-          type: EVENT_TYPE_LABELS[e.type] ?? "Iné",
-          date: e.start_at,
-          href: "/calendar",
-        }));
-    } catch {
-      // nekritické
-    }
-  }
+  const upcoming: EventItem[] = calendarEvents
+    .filter((event) => new Date(event.start_at) >= startOfToday)
+    .slice(0, 6)
+    .map((event) => ({
+      title: event.title,
+      type: EVENT_TYPE_LABELS[event.type] ?? "Iné",
+      date: event.start_at,
+      href: "/calendar",
+    }));
 
   return (
     <div className="space-y-6">

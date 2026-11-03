@@ -54,8 +54,10 @@ export default async function FinanceDashboardPage({
   );
 
   const total = rows.reduce((s, b) => s + Number(b.current_balance_minor ?? 0), 0);
-  const accounts = await loadFinanceAccounts();
-  const categories = await loadActiveCategories();
+  const [accounts, categories] = await Promise.all([
+    loadFinanceAccounts(),
+    loadActiveCategories(),
+  ]);
 
   return (
     <div className="space-y-6">
@@ -147,4 +149,3 @@ export default async function FinanceDashboardPage({
     </div>
   );
 }
-
