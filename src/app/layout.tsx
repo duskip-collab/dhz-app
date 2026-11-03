@@ -4,6 +4,7 @@ import "./globals.css";
 import { PWARegister } from "@/components/pwa/PWARegister";
 import { OfflineIndicator } from "@/components/pwa/OfflineIndicator";
 import { InstallPrompt } from "@/components/pwa/InstallPrompt";
+import { InteractionFeedback } from "@/components/ui/InteractionFeedback";
 
 const inter = Inter({ subsets: ["latin", "latin-ext"] });
 
@@ -59,6 +60,7 @@ export default function RootLayout({
         <PWARegister />
         <OfflineIndicator />
         <InstallPrompt />
+        <InteractionFeedback />
         {children}
       </body>
     </html>

@@ -24,7 +24,7 @@ const sizes: Record<Size, string> = {
 export function Button({ variant = "primary", size = "md", className = "", ...rest }: Props) {
   return (
     <button
-      className={`inline-flex items-center justify-center gap-2 rounded-lg font-semibold transition focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px] ${variants[variant]} ${sizes[size]} ${className}`}
+      className={`inline-flex items-center justify-center gap-2 rounded-lg font-semibold transition-transform duration-75 ease-in-out active:scale-[0.98] active:opacity-85 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px] ${variants[variant]} ${sizes[size]} ${className}`}
       {...rest}
     />
   );
