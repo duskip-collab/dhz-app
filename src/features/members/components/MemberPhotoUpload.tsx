@@ -1,8 +1,9 @@
 "use client";
 
-import { useActionState, useRef, useState } from "react";
+import { useActionState } from "react";
 import { Camera, Loader2 } from "lucide-react";
 import type { ActionState } from "@/app/(app)/members/actions";
+import { ImageUploadField } from "@/components/ui/ImageUploadField";
 
 export function MemberPhotoUpload({
   action,
@@ -12,53 +13,18 @@ export function MemberPhotoUpload({
   currentPhotoUrl: string | null;
 }) {
   const [state, formAction, pending] = useActionState(action, null);
-  const [preview, setPreview] = useState<string | null>(null);
-  const fileRef = useRef<HTMLInputElement>(null);
 
   const error = !state || state.ok ? undefined : state.errors.photo ?? state.message;
 
   return (
     <form action={formAction} className="space-y-3">
-      <div className="flex items-center gap-4">
-        {preview || currentPhotoUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={preview ?? currentPhotoUrl ?? ""}
-            alt="Fotografia člena"
-            className="h-20 w-20 rounded-full border border-gray-200 object-cover"
-          />
-        ) : (
-          <span className="flex h-20 w-20 items-center justify-center rounded-full bg-[#C62828]/10 text-[#C62828]">
-            <Camera className="h-8 w-8" />
-          </span>
-        )}
-        <div className="min-w-0 flex-1">
-          <label
-            htmlFor="member-photo"
-            className="inline-flex min-h-[44px] cursor-pointer items-center rounded-lg border border-gray-200 px-4 text-sm font-semibold text-gray-700 transition hover:border-red-200 hover:text-[#C62828]"
-          >
-            Vybrať fotografiu
-          </label>
-          <input
-            ref={fileRef}
-            id="member-photo"
-            name="photo"
-            type="file"
-            accept="image/*"
-            capture="environment"
-            className="sr-only"
-            onChange={(e) => {
-              const f = e.target.files?.[0];
-              if (f) setPreview(URL.createObjectURL(f));
-              else setPreview(null);
-            }}
-          />
-          <p className="mt-1 text-xs text-gray-400">
-            JPG, PNG alebo WebP, max. 5 MB. Na mobile možno odfotiť priamo fotoaparátom.
-            Ukladá sa do súkromného úložiska.
-          </p>
-        </div>
-      </div>
+      <ImageUploadField
+        name="photo"
+        currentPhotoUrl={currentPhotoUrl}
+        caption="JPG, PNG alebo WebP, max. 5 MB. Ukladá sa do súkromného úložiska."
+        disabled={pending}
+        rounded
+      />
       {error ? (
         <p role="alert" className="text-xs text-[#C62828]">
           {error}

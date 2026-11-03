@@ -5,6 +5,7 @@ import { Download, FileText, Image as ImageIcon, Loader2, Trash2, Upload } from 
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
+import { ImageUploadField } from "@/components/ui/ImageUploadField";
 import type {
   FinanceTransactionAttachmentRow,
   FinanceTransactionStatus,
@@ -60,6 +61,7 @@ export function AttachmentManager({
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [fieldError, setFieldError] = useState<string | null>(null);
+  const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -116,6 +118,28 @@ export function AttachmentManager({
         setFieldError(res.errors.file ?? res.message);
         return;
       }
+      await refresh();
+    } catch {
+      setError("Nahravanie zlyhalo.");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleUploadImage = async () => {
+    if (!selectedImage) return;
+    setFieldError(null);
+    setError(null);
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.set("file", selectedImage);
+      const res = await uploadTransactionAttachment(transactionId, null, fd);
+      if (!res.ok) {
+        setFieldError(res.errors.file ?? res.message);
+        return;
+      }
+      setSelectedImage(null);
       await refresh();
     } catch {
       setError("Nahravanie zlyhalo.");
@@ -232,7 +256,7 @@ export function AttachmentManager({
           <input
             ref={inputRef}
             type="file"
-            accept="application/pdf,image/jpeg,image/png,image/webp"
+            accept="application/pdf"
             className="hidden"
             onChange={handlePick}
             disabled={uploading}
@@ -250,6 +274,32 @@ export function AttachmentManager({
             )}
             {uploading ? "Nahravam…" : "Nahrat prilohu"}
           </Button>
+          <div className="mt-4">
+            <ImageUploadField
+              key={selectedImage ? "image-selected" : "image-empty"}
+              onFileChange={(file) => {
+                setSelectedImage(file);
+                setFieldError(null);
+                setError(null);
+              }}
+              disabled={uploading}
+              caption="JPG, PNG alebo WebP. Náhľad pred nahratím."
+            />
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={uploading || !selectedImage}
+              onClick={handleUploadImage}
+              className="mt-3"
+            >
+              {uploading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Upload className="h-4 w-4" />
+              )}
+              {uploading ? "Nahravam…" : "Nahrat fotografiu"}
+            </Button>
+          </div>
           {fieldError && <p className="mt-2 text-xs text-red-600">{fieldError}</p>}
         </div>
       )}
