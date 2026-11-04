@@ -8,8 +8,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { createClient as createServiceRoleClient } from "@/lib/supabase/server";
-import { claimInvitationCodeForRegistration, verifyInvitationCode } from "@/lib/auth/invitations.service";
+import { claimInvitationCode, verifyInvitationCode } from "@/lib/auth/invitations.service";
 import { ROLE_LABELS } from "@/lib/auth/roles";
 import type { AppRole } from "@/lib/auth/roles";
 
@@ -52,17 +51,7 @@ export async function acceptInvitationAction(code: string): Promise<AcceptInvita
     return { ok: false, message: "Zadajte pozývací kód." };
   }
 
-  const supabase = await createClient();
-  const { data: { user }, error: userError } = await supabase.auth.getUser();
-
-  if (userError || !user) {
-    return {
-      ok: false,
-      message: "Na uplatnenie kódu musíte byť prihlásený. Potvrďte e-mail a prihláste sa, potom kód uplatníte.",
-    };
-  }
-
-  const result = await claimInvitationCode(normalized, user.id, user.email ?? "");
+  const result = await claimInvitationCode(normalized);
 
   if (!result.success) {
     if (result.error === "code_unusable") {
@@ -87,9 +76,7 @@ export async function acceptInvitationAction(code: string): Promise<AcceptInvita
  * Tohoho toku:
  * 1. Overí pozývací kód (bez spotrebovania)
  * 2. Vytvorí používateľa v Supabase Auth
- * 3. Nastaví email_confirmed_at na serveri (pomocou service_role)
- * 4. Uplní pozývací kód (priradi rolu, vytvorí audit záznamov)
- * 5. Používateľ je automaticky prihlásený via Supabase session
+ * 3. Uplatní pozývací kód cez aktuálnu autentifikovanú session
  *
  * @param code - Pozývací kód z registračného formulára
  * @param email - E-mailová adresa používateľa
@@ -112,9 +99,6 @@ export async function registerWithInvitationCodeAction(
     return { success: false, message: "Pozývací kód nie je platný." };
   }
 
-  const role = verification.role;
-  const roleLabel = ROLE_LABELS[role] ?? role;
-
   // Krok 2: Vytvorenie používateľa v Supabase Auth
   const supabase = await createClient();
   const { data: authData, error: signUpError } = await supabase.auth.signUp({
@@ -132,35 +116,31 @@ export async function registerWithInvitationCodeAction(
     return { success: false, message: "Nepodarilo sa získať ID používateľa." };
   }
 
-  // Krok 3: Nastaviť email_confirmed_at na serveri pomocou service_role
-  try {
-    const serviceSupabase = await createClient(true);
-    const { error: updateError } = await serviceSupabase
-      .from("auth.users")
-      .update({ email_confirmed_at: new Date().toISOString() })
-      .eq("id", newUserId);
-    if (updateError) {
-      console.error("[registerWithInvitationCodeAction] update email_confirmed_at error:", updateError);
-    }
-  } catch (err) {
-    console.error("[registerWithInvitationCodeAction] service client error:", err);
+  if (!authData.session) {
+    return {
+      success: false,
+      message: "Účet bol vytvorený. Prihláste sa doň a potom uplatnite pozývací kód.",
+    };
   }
 
-  // Krok 4: Uplníme pozývací kód
-  // K19: Použiame registration-specific claim funkciu, ktora nepouziva auth.getUser()
-  const claimResult = await claimInvitationCodeForRegistration(normalized, newUserId, email);
+  // Krok 3: Uplatnenie pozvánky iba cez identitu aktuálnej serverovej session.
+  const claimResult = await claimInvitationCode(normalized);
 
-  if (!claimResult.success) {
-    try {
-      await supabase.auth.admin.deleteUser(newUserId);
-    } catch (deleteError) {
-      console.error("[registerWithInvitationCodeAction] delete user error:", deleteError);
+  if (!claimResult.success || !claimResult.role) {
+    if (claimResult.error === "code_unusable") {
+      return { success: false, message: "Tento pozývací kód už bol použitý." };
     }
-    if (claimResult.error !== "code_unusable") {
-      return { success: false, message: "Chyba pri uplatňovaní kódu. Skúste to znova." };
+    if (claimResult.error === "invalid_code") {
+      return { success: false, message: "Pozývací kód nie je platný." };
     }
-    return { success: false, message: "Tento pozývací kód už bol použitý." };
+    return {
+      success: false,
+      message: "Účet bol vytvorený, ale pozvánku sa nepodarilo uplatniť. Prihláste sa a skúste to znova.",
+    };
   }
+
+  const role = claimResult.role;
+  const roleLabel = ROLE_LABELS[role] ?? role;
 
   return {
     success: true,
@@ -173,8 +153,3 @@ export async function registerWithInvitationCodeAction(
     redirectTo: "/",
   };
 }
-
-/**
- * K19 – Registrácia s pozývacím kódom bez predchádzajúceho prihlasenia.
- */
-export async function registerWithInvitationCodeAction(

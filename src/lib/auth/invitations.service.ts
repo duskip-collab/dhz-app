@@ -253,11 +253,11 @@ export async function verifyInvitationCode(
   }>;
 
   const row = rows[0];
-  if (!row) return null;
+  if (!row || !isAppRole(row.role)) return null;
 
   return {
     invitation_id: row.invitation_id,
-    role: row.role as AppRole,
+    role: row.role,
     status: row.status as InvitationStatus,
     is_valid: row.is_valid,
     expires_at: row.expires_at,
@@ -272,66 +272,58 @@ export async function verifyInvitationCode(
  * Jednorazovosť je vynútená databázou; pri súbežných požiadavkách vyhrá
  * iba jeden. Rola pochádza IBA z pozvánky.
  *
- * BEZPEČNOSŤ: používateľ sa identifikuje VYLUČNE zo serverovej session
- * (`auth.getUser()`). `userId` z argumentu je iba núdzový zdroj pre
- * service_role integráciu – pri bežnom toku sa použije session id a RPC
- * overí, že `p_user_id` sedí s `auth.uid()`.
+ * Identita používateľa pochádza zo serverovej session. RPC overí, že
+ * `p_user_id` zodpovedá `auth.uid()`; service-role klient sa nepoužíva.
  */
-export async function claimInvitationCodeForRegistration(
-  code: string,
-  userId: string,
-  email: string,
-): Promise<InvitationClaimResult> {
+export async function claimInvitationCode(code: string): Promise<InvitationClaimResult> {
   const normalized = code.trim();
-  if (!normalized || !userId) {
+  if (!normalized) {
     return { success: false, error: "invalid_code" };
   }
 
-  const supabase = await createClient(true); // useServiceRole=true
+  const supabase = await createClient();
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser();
 
-  // PRIAMÝ vyvolanie RPC bez volania supabase.auth.getUser().
-  // identity prichádza z dôveryhodného serverového registračného toku,
-  // nie z klientskej sessionu.
-  const { data, error } = await supabase.rpc("claim_invitation_code" as never, {
-    p_code: normalized,
-    p_user_id: userId,
-    p_email: email.trim().toLowerCase(),
-  } as never);
-
-  if (error) {
-    console.error("[claimInvitationCodeForRegistration] RPC error:", error.message);
+  if (userError || !user) {
     return { success: false, error: "unknown" };
   }
 
-  const result = (data ?? null) as {
-    success?: boolean;
-    invitation_id?: string;
-    role?: string;
-    error?: string;
-  } | null;
+  const { data, error } = await supabase.rpc("claim_invitation_code" as never, {
+    p_code: normalized,
+    p_user_id: user.id,
+    p_email: user.email ?? "",
+  } as never);
 
-  if (!result || result.success !== true) {
-    // Ak kód už bol použitý, alebo iná chyba DB validácie
-    if (result?.error === 'code_unusable' || result?.error === 'invalid_code') {
-      return { success: false, error: result.error };
+  if (error) {
+    console.error("[claimInvitationCode] RPC error:", error.message);
+    return { success: false, error: "unknown" };
+  }
+
+  if (!isRecord(data)) {
+    return { success: false, error: "unknown" };
+  }
+
+  if (data.success !== true) {
+    if (data.error === "code_unusable" || data.error === "invalid_code") {
+      return { success: false, error: data.error };
     }
+    return { success: false, error: "unknown" };
+  }
+
+  if (typeof data.invitation_id !== "string" || typeof data.role !== "string" || !isAppRole(data.role)) {
     return { success: false, error: "unknown" };
   }
 
   return {
     success: true,
-    invitation_id: result.invitation_id,
-    role: result.role as AppRole | undefined,
+    invitation_id: data.invitation_id,
+    role: data.role,
   };
 }
 
-/**
- * K19 – OverenéClaim pre registračnýtok.
- *
- * Na rozdiel od claimInvitationCode() NEvolá supabase.auth.getUser().
- * Identity (userId) prichádza z dôveryhodného serverového registračného toku
- * (registerWithInvitationCodeAction), kde bol user vytvorený s known id.
- *
- * Existujúci claimInvitationCode() pre už pred-prihlásených používateľov
- * zostáva nezmienený.
- */
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}

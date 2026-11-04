@@ -228,21 +228,9 @@ export function RegisterForm({ initialCode = "" }: { initialCode?: string }) {
       const result = await registerWithInvitationCodeAction(code, normalizedEmail, password);
       if (!result.success) {
         setError(result.message);
-        setSubmitting(false);
         return;
       }
       // Uspešná registrácia - používateľ je prihlásený via session
-      setSubmitting(false);
-      router.push("/dashboard");
-      router.refresh();
-    } catch {
-      setError("Registrácia zlyhala. Skúste to znova.");
-      setSubmitting(false);
-    }
-  }
-        setError(claim.message);
-        return;
-      }
       router.push("/dashboard");
       router.refresh();
     } catch {
