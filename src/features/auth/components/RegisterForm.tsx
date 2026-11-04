@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { CheckCircle2, KeyRound, Loader2, Mail, ShieldCheck, UserPlus } from "lucide-react";
 import {
   acceptInvitationAction,
+  registerWithInvitationCodeAction,
   verifyInvitationCodeAction,
   type VerifyCodeState,
 } from "@/app/register/actions";
@@ -222,41 +223,23 @@ export function RegisterForm({ initialCode = "" }: { initialCode?: string }) {
 
     setSubmitting(true);
     try {
-      const codeVerification = await verifyInvitationCodeAction(code);
-      setVerification(codeVerification);
-      if (!codeVerification.ok) {
-        setError(codeVerification.message);
+      // K19: Single authoritative registration flow via server action.
+      // signUp() is called ONLY in registerWithInvitationCodeAction, not in the UI.
+      const result = await registerWithInvitationCodeAction(code, normalizedEmail, password);
+      if (!result.success) {
+        setError(result.message);
+        setSubmitting(false);
         return;
       }
-
-      const supabase = createClient();
-      const { data, error: signUpError } = await supabase.auth.signUp({
-        email: normalizedEmail,
-        password,
-        options: {
-          emailRedirectTo: new URL("/register", window.location.origin).toString(),
-        },
-      });
-
-      if (signUpError) {
-        setError(
-          signUpError.message.toLowerCase().includes("already registered")
-            ? "Účet s týmto e-mailom už existuje. Prihláste sa."
-            : "Registrácia zlyhala. Skúste to znova.",
-        );
-        return;
-      }
-
-      // Session existuje iba pri vypnutom potvrdzovaní e-mailu.
-      if (!data.session) {
-        setInfo(
-          "Účet bol vytvorený. Potvrďte e-mail cez odkaz, ktorý vám pošleme. Potom sa prihláste a na tejto stránke znovu zadajte pozývací kód, aby sa vám priradila rola.",
-        );
-        return;
-      }
-
-      const claim = await acceptInvitationAction(code);
-      if (!claim.ok) {
+      // Uspešná registrácia - používateľ je prihlásený via session
+      setSubmitting(false);
+      router.push("/dashboard");
+      router.refresh();
+    } catch {
+      setError("Registrácia zlyhala. Skúste to znova.");
+      setSubmitting(false);
+    }
+  }
         setError(claim.message);
         return;
       }
