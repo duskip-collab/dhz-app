@@ -3,7 +3,7 @@
 import { Search } from "lucide-react";
 import type { MembershipType } from "@/lib/members/members.service";
 
-export type MemberTab = "all" | "adult" | "youth" | "inactive";
+export type MemberTab = "all" | "adult" | "youth" | "preparatory" | "dorast" | "inactive";
 
 export const MEMBER_TAB_FILTERS: Record<
   MemberTab,
@@ -11,7 +11,9 @@ export const MEMBER_TAB_FILTERS: Record<
 > = {
   all: { status: "active" },
   adult: { membershipTypes: ["adult"], status: "active" },
-  youth: { membershipTypes: ["youth", "preparatory", "dorast"], status: "active" },
+  youth: { membershipTypes: ["youth"], status: "active" },
+  preparatory: { membershipTypes: ["preparatory"], status: "active" },
+  dorast: { membershipTypes: ["dorast"], status: "active" },
   inactive: { status: "inactive" },
 };
 
@@ -19,6 +21,8 @@ const TABS: { id: MemberTab; label: string }[] = [
   { id: "all", label: "Všetci" },
   { id: "adult", label: "Dospelí" },
   { id: "youth", label: "Mládež" },
+  { id: "preparatory", label: "Prípravka" },
+  { id: "dorast", label: "Dorast" },
   { id: "inactive", label: "Neaktívni" },
 ];
 

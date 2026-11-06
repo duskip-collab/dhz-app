@@ -6,6 +6,8 @@ import type { Member } from "@/lib/members/members.service";
 import { MEMBER_TAB_FILTERS, MemberFilters, type MemberTab } from "./MemberFilters";
 import { MemberTable } from "./MemberTable";
 import { MemberCardList } from "./MemberCardList";
+import { MemberPhotoGallery } from "./MemberPhotoGallery";
+import { MemberViewToggle, type MemberView } from "./MemberViewToggle";
 
 function normalize(value: string): string {
   return value
@@ -25,6 +27,7 @@ export function MemberList({
 }) {
   const [search, setSearch] = useState("");
   const [tab, setTab] = useState<MemberTab>("all");
+  const [view, setView] = useState<MemberView>("list");
 
   const filtered = useMemo(() => {
     const filter = MEMBER_TAB_FILTERS[tab];
@@ -39,7 +42,8 @@ export function MemberList({
   }, [members, search, tab]);
 
   return (
-    <div className="space-y-4">
+    <div className="min-w-0 space-y-4 overflow-x-hidden">
+      <MemberViewToggle value={view} onChange={setView} />
       <MemberFilters
         search={search}
         onSearchChange={setSearch}
@@ -47,7 +51,7 @@ export function MemberList({
         onTabChange={setTab}
         resultCount={filtered.length}
       />
-      {filtered.length === 0 ? (
+      {filtered.length === 0 && view === "list" ? (
         <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-gray-300 bg-white px-6 py-12 text-center">
           <span className="flex h-12 w-12 items-center justify-center rounded-full bg-gray-100 text-gray-400">
             <SearchX className="h-6 w-6" />
@@ -69,6 +73,8 @@ export function MemberList({
             Zrušiť filtre
           </button>
         </div>
+      ) : view === "photos" ? (
+        <MemberPhotoGallery members={filtered} photoUrls={photoUrls} />
       ) : (
         <>
           <MemberTable members={filtered} canEdit={canEdit} photoUrls={photoUrls} />
