@@ -2,7 +2,7 @@ import Link from "next/link";
 import { CheckCircle2, Plus, Users } from "lucide-react";
 import { requirePermission } from "@/lib/auth/server";
 import { PERMISSIONS, hasPermission } from "@/lib/auth/permissions";
-import { listMembers } from "@/lib/members/members.service";
+import { getMemberPhotoUrls, listMembers } from "@/lib/members/members.service";
 import { MemberList } from "@/features/members/components/MemberList";
 
 export default async function MembersPage({
@@ -22,6 +22,7 @@ export default async function MembersPage({
   } catch {
     members = [];
   }
+  const photoUrls = await getMemberPhotoUrls(members);
 
   const activeCount = members.filter((m) => m.status === "active").length;
   const canCreate = hasPermission(ctx.permissions, PERMISSIONS.MEMBERS_CREATE);
@@ -70,7 +71,7 @@ export default async function MembersPage({
           </Link>
         ) : null}
       </div>
-      <MemberList members={members} canEdit={canEdit} />
+      <MemberList members={members} canEdit={canEdit} photoUrls={photoUrls} />
     </div>
   );
 }

@@ -992,6 +992,49 @@ export async function getMemberPhotoUrl(photoPath: string | null): Promise<strin
   return data.signedUrl;
 }
 
+export async function getMemberPhotoUrls(
+  members: Pick<Member, "id" | "photo_path">[]
+): Promise<Record<string, string>> {
+  const withPhotos = members.filter(
+    (member): member is Pick<Member, "id"> & { photo_path: string } => Boolean(member.photo_path)
+  );
+  if (withPhotos.length === 0) return {};
+
+  const ctx = await requireAuthenticated();
+  const hasView =
+    checkPermission(ctx, PERMISSIONS.MEMBERS_VIEW) ||
+    (await checkPermissionServer(ctx.userId, PERMISSIONS.MEMBERS_VIEW));
+  if (!hasView) {
+    throw createAuthError(403, "Nemáte oprávnenie na zobrazenie fotografií členov.");
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase.storage
+    .from(MEMBER_PHOTO_BUCKET)
+    .createSignedUrls(
+      withPhotos.map((member) => member.photo_path),
+      60 * 10
+    );
+
+  if (error) {
+    console.error("[getMemberPhotoUrls] Storage error:", error);
+    return {};
+  }
+
+  const urls: Record<string, string> = {};
+  data.forEach((result, index) => {
+    if (result.signedUrl) {
+      urls[withPhotos[index].id] = result.signedUrl;
+    } else if (result.error) {
+      console.error("[getMemberPhotoUrls] Failed to sign photo:", {
+        path: result.path,
+        error: result.error,
+      });
+    }
+  });
+  return urls;
+}
+
 
 // =============================================================================
 // TEST FIXTURES (K8.2)

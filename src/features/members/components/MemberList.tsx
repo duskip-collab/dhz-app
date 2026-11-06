@@ -17,9 +17,11 @@ function normalize(value: string): string {
 export function MemberList({
   members,
   canEdit,
+  photoUrls,
 }: {
   members: Member[];
   canEdit: boolean;
+  photoUrls: Record<string, string>;
 }) {
   const [search, setSearch] = useState("");
   const [tab, setTab] = useState<MemberTab>("all");
@@ -69,8 +71,8 @@ export function MemberList({
         </div>
       ) : (
         <>
-          <MemberTable members={filtered} canEdit={canEdit} />
-          <MemberCardList members={filtered} canEdit={canEdit} />
+          <MemberTable members={filtered} canEdit={canEdit} photoUrls={photoUrls} />
+          <MemberCardList members={filtered} canEdit={canEdit} photoUrls={photoUrls} />
         </>
       )}
     </div>

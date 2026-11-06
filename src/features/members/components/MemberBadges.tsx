@@ -44,20 +44,30 @@ export function MemberStatusBadge({ status }: { status: MemberStatus }) {
 export function MemberAvatar({
   firstName,
   lastName,
-  photoPath,
+  photoUrl,
 }: {
   firstName: string;
   lastName: string;
-  photoPath?: string | null;
+  photoUrl?: string;
 }) {
   const initials = `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase();
   return (
     <span
-      aria-hidden
-      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#C62828]/10 text-sm font-bold text-[#C62828]"
-      title={photoPath ? "Fotografia bude dostupná v K8.4" : undefined}
+      className="relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#C62828]/10 text-sm font-bold text-[#C62828]"
     >
       {initials}
+      {photoUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={photoUrl}
+          alt=""
+          aria-hidden="true"
+          onError={(event) => {
+            event.currentTarget.style.display = "none";
+          }}
+          className="absolute inset-0 h-full w-full object-cover"
+        />
+      ) : null}
     </span>
   );
 }

@@ -8,9 +8,11 @@ import { MemberAvatar, MembershipBadge, MemberStatusBadge, ageFromBirthDate, mas
 export function MemberTable({
   members,
   canEdit,
+  photoUrls,
 }: {
   members: Member[];
   canEdit: boolean;
+  photoUrls: Record<string, string>;
 }) {
   return (
     <div className="hidden overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm md:block">
@@ -35,7 +37,11 @@ export function MemberTable({
               <tr key={m.id} className="border-b border-gray-50 transition last:border-0 hover:bg-gray-50/60">
                 <td className="px-5 py-3">
                   <Link href={`/members/${m.id}`} className="flex items-center gap-3 hover:underline">
-                    <MemberAvatar firstName={m.first_name} lastName={m.last_name} />
+                    <MemberAvatar
+                      firstName={m.first_name}
+                      lastName={m.last_name}
+                      photoUrl={photoUrls[m.id]}
+                    />
                     <div className="min-w-0">
                       <p className="truncate font-semibold text-gray-900">
                         {m.title ? `${m.title} ` : ""}{m.first_name} {m.last_name}
