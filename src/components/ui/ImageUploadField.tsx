@@ -22,6 +22,7 @@ export function ImageUploadField({
   const filesRef = useRef<HTMLInputElement>(null);
   const cameraRef = useRef<HTMLInputElement>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [selectedSource, setSelectedSource] = useState<"files" | "camera" | null>(null);
 
   useEffect(() => {
     return () => {
@@ -29,12 +30,11 @@ export function ImageUploadField({
     };
   }, [previewUrl]);
 
-  const handleChange = (selectedInput: HTMLInputElement, otherInput: HTMLInputElement | null) => {
+  const handleChange = (source: "files" | "camera", selectedInput: HTMLInputElement) => {
     const file = selectedInput.files?.[0] ?? null;
-    if (name) {
-      selectedInput.name = file ? name : "";
-      if (otherInput) otherInput.name = "";
-    }
+    const otherInput = source === "files" ? cameraRef.current : filesRef.current;
+    if (otherInput) otherInput.value = "";
+    setSelectedSource(file ? source : null);
     setPreviewUrl(file ? URL.createObjectURL(file) : null);
     onFileChange?.(file);
   };
@@ -42,12 +42,11 @@ export function ImageUploadField({
   const clearSelection = () => {
     if (filesRef.current) {
       filesRef.current.value = "";
-      filesRef.current.name = "";
     }
     if (cameraRef.current) {
       cameraRef.current.value = "";
-      cameraRef.current.name = "";
     }
+    setSelectedSource(null);
     setPreviewUrl(null);
     onFileChange?.(null);
   };
@@ -71,20 +70,22 @@ export function ImageUploadField({
           ref={filesRef}
           id={`${generatedId}-files`}
           type="file"
+          name={selectedSource === "files" ? name : undefined}
           accept="image/*"
           className="sr-only"
           disabled={disabled}
-          onChange={(event) => handleChange(event.currentTarget, cameraRef.current)}
+          onChange={(event) => handleChange("files", event.currentTarget)}
         />
         <input
           ref={cameraRef}
           id={`${generatedId}-camera`}
           type="file"
+          name={selectedSource === "camera" ? name : undefined}
           accept="image/*"
           capture="environment"
           className="sr-only"
           disabled={disabled}
-          onChange={(event) => handleChange(event.currentTarget, filesRef.current)}
+          onChange={(event) => handleChange("camera", event.currentTarget)}
         />
         <div className="flex flex-wrap gap-2">
           <button

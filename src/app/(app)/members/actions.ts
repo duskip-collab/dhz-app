@@ -344,6 +344,25 @@ export async function uploadMemberPhotoAction(
     });
     if (upErr) {
       console.error("[uploadMemberPhotoAction] Storage upload error:", upErr);
+      const uploadError = upErr.message.toLowerCase();
+      if (uploadError.includes("bucket") && uploadError.includes("not found")) {
+        return {
+          ok: false,
+          errors: { photo: "Úložisko member-photos neexistuje. Skontrolujte migrácie Storage." },
+          message: "Úložisko member-photos neexistuje. Skontrolujte migrácie Storage.",
+        };
+      }
+      if (
+        uploadError.includes("row-level security") ||
+        uploadError.includes("permission") ||
+        uploadError.includes("unauthorized")
+      ) {
+        return {
+          ok: false,
+          errors: { photo: "Nemáte oprávnenie na nahrávanie alebo chýba Storage policy." },
+          message: "Nemáte oprávnenie na nahrávanie alebo chýba Storage policy.",
+        };
+      }
       return { ok: false, errors: { photo: "Nahrávanie zlyhalo." }, message: "Nahrávanie zlyhalo." };
     }
 
@@ -391,17 +410,28 @@ export async function uploadMemberPhotoAction(
     revalidatePath(`/members/${memberId}/edit`);
     return { ok: true, memberId };
   } catch (e) {
-    if ((e as { statusCode?: number }).statusCode === 403) {
+    const status = (e as { statusCode?: number }).statusCode;
+    if (status !== 403 && status !== 404 && status !== 409) {
+      console.error("[uploadMemberPhotoAction] Upload failed:", e);
+    }
+    if (status === 403) {
       return { ok: false, errors: {}, message: "Nemáte oprávnenie." };
     }
-    if ((e as { statusCode?: number }).statusCode === 409) {
+    if (status === 404) {
+      return { ok: false, errors: {}, message: "Člen sa nenašiel." };
+    }
+    if (status === 409) {
       return {
         ok: false,
         errors: { photo: "Fotografia sa medzitým zmenila. Skúste nahrávanie znova." },
         message: "Fotografia sa medzitým zmenila. Skúste nahrávanie znova.",
       };
     }
-    return { ok: false, errors: {}, message: "Nahrávanie zlyhalo." };
+    return {
+      ok: false,
+      errors: { photo: "Nahrávanie zlyhalo. Skontrolujte bucket member-photos a Storage policies." },
+      message: "Nahrávanie zlyhalo. Skontrolujte bucket member-photos a Storage policies.",
+    };
   }
 }
 
