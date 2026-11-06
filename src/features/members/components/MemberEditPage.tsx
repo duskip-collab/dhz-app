@@ -11,6 +11,7 @@ import {
   updateGuardianAction,
   updateMemberAction,
   uploadMemberPhotoAction,
+  deleteMemberPhotoAction,
 } from "@/app/(app)/members/actions";
 
 /**
@@ -45,7 +46,9 @@ export function MemberEditPage({
         <h2 className="mb-3 text-base font-bold text-gray-900">Fotografia člena</h2>
         <MemberPhotoUpload
           action={uploadMemberPhotoAction.bind(null, member.id)}
+          deleteAction={deleteMemberPhotoAction.bind(null, member.id)}
           currentPhotoUrl={photoUrl}
+          hasPhoto={Boolean(member.photo_path)}
         />
       </div>
 

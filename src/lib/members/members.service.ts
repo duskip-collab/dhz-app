@@ -961,6 +961,74 @@ export async function replaceMemberPhotoPath(
   }
 }
 
+export async function clearMemberPhotoPath(
+  memberId: string,
+  expectedPhotoPath: string
+): Promise<void> {
+  const ctx = await requireAuthenticated();
+  const hasEdit =
+    checkPermission(ctx, PERMISSIONS.MEMBERS_EDIT) ||
+    (await checkPermissionServer(ctx.userId, PERMISSIONS.MEMBERS_EDIT));
+  if (!hasEdit) {
+    throw createAuthError(403, "Nemáte oprávnenie na upravovanie člena.");
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("members")
+    .update({
+      photo_path: null,
+      updated_by: ctx.userId,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", memberId)
+    .eq("photo_path", expectedPhotoPath)
+    .select("id")
+    .maybeSingle();
+
+  if (error) {
+    console.error("[clearMemberPhotoPath] Supabase error:", error);
+    throw createAuthError(500, "Chyba pri odstraňovaní fotografie člena.");
+  }
+  if (!data) {
+    throw createAuthError(409, "Fotografia člena sa medzitým zmenila.");
+  }
+}
+
+export async function restoreMemberPhotoPath(
+  memberId: string,
+  photoPath: string
+): Promise<void> {
+  const ctx = await requireAuthenticated();
+  const hasEdit =
+    checkPermission(ctx, PERMISSIONS.MEMBERS_EDIT) ||
+    (await checkPermissionServer(ctx.userId, PERMISSIONS.MEMBERS_EDIT));
+  if (!hasEdit) {
+    throw createAuthError(403, "Nemáte oprávnenie na upravovanie člena.");
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("members")
+    .update({
+      photo_path: photoPath,
+      updated_by: ctx.userId,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", memberId)
+    .is("photo_path", null)
+    .select("id")
+    .maybeSingle();
+
+  if (error) {
+    console.error("[restoreMemberPhotoPath] Supabase error:", error);
+    throw createAuthError(500, "Chyba pri obnovení fotografie člena.");
+  }
+  if (!data) {
+    throw createAuthError(409, "Fotografia člena sa medzitým zmenila.");
+  }
+}
+
 /**
  * getMemberPhotoUrl – časovo obmedzená Signed URL fotografie člena.
  * Vyžaduje `members.view`. Nevracia verejnú URL.

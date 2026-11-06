@@ -24,7 +24,7 @@ import {
 } from "@/features/members/schemas/member.validation";
 
 export type ActionState =
-  | { ok: true; memberId?: string; guardian?: MemberGuardian; guardianId?: string }
+  | { ok: true; memberId?: string; guardian?: MemberGuardian; guardianId?: string; message?: string }
   | { ok: false; errors: Record<string, string>; message: string };
 
 function field(formData: FormData, name: string): string | null {
@@ -431,6 +431,90 @@ export async function uploadMemberPhotoAction(
       ok: false,
       errors: { photo: "Nahrávanie zlyhalo. Skontrolujte bucket member-photos a Storage policies." },
       message: "Nahrávanie zlyhalo. Skontrolujte bucket member-photos a Storage policies.",
+    };
+  }
+}
+
+export async function deleteMemberPhotoAction(
+  memberId: string,
+  prevState: ActionState | null
+): Promise<ActionState> {
+  void prevState;
+  try {
+    const { getAuthContext, hasPermissionServer } = await import("@/lib/auth/server");
+    const { PERMISSIONS } = await import("@/lib/auth/permissions");
+    const {
+      clearMemberPhotoPath,
+      getMemberById,
+      restoreMemberPhotoPath,
+    } = await import("@/lib/members/members.service");
+    const { createClient } = await import("@/lib/supabase/server");
+
+    const ctx = await getAuthContext();
+    const canEdit =
+      ctx.permissions.includes(PERMISSIONS.MEMBERS_EDIT) ||
+      (await hasPermissionServer(ctx.userId, PERMISSIONS.MEMBERS_EDIT));
+    if (!canEdit) return { ok: false, errors: {}, message: "Nemáte oprávnenie." };
+
+    const member = await getMemberById(memberId);
+    if (!member.photo_path) {
+      return { ok: false, errors: {}, message: "Člen nemá uloženú fotografiu." };
+    }
+
+    await clearMemberPhotoPath(memberId, member.photo_path);
+
+    const supabase = await createClient();
+    let removeError: unknown = null;
+    try {
+      const { error } = await supabase.storage.from(PHOTO_BUCKET).remove([member.photo_path]);
+      removeError = error;
+    } catch (error) {
+      removeError = error;
+    }
+
+    if (removeError) {
+      console.error("[deleteMemberPhotoAction] Storage delete error:", {
+        path: member.photo_path,
+        error: removeError,
+      });
+      try {
+        await restoreMemberPhotoPath(memberId, member.photo_path);
+      } catch (restoreError) {
+        console.error("[deleteMemberPhotoAction] Failed to restore photo path:", {
+          memberId,
+          path: member.photo_path,
+          error: restoreError,
+        });
+      }
+      return {
+        ok: false,
+        errors: { photo: "Fotografiu sa nepodarilo odstrániť. Skúste to znova." },
+        message: "Fotografiu sa nepodarilo odstrániť. Skúste to znova.",
+      };
+    }
+
+    revalidatePath("/members");
+    revalidatePath(`/members/${memberId}`);
+    revalidatePath(`/members/${memberId}/edit`);
+    return { ok: true, memberId, message: "Fotografia bola odstránená." };
+  } catch (e) {
+    const status = (e as { statusCode?: number }).statusCode;
+    if (status !== 403 && status !== 404 && status !== 409) {
+      console.error("[deleteMemberPhotoAction] Delete failed:", e);
+    }
+    if (status === 403) return { ok: false, errors: {}, message: "Nemáte oprávnenie." };
+    if (status === 404) return { ok: false, errors: {}, message: "Člen sa nenašiel." };
+    if (status === 409) {
+      return {
+        ok: false,
+        errors: { photo: "Fotografia sa medzitým zmenila. Obnovte profil a skúste znova." },
+        message: "Fotografia sa medzitým zmenila. Obnovte profil a skúste znova.",
+      };
+    }
+    return {
+      ok: false,
+      errors: { photo: "Fotografiu sa nepodarilo odstrániť." },
+      message: "Fotografiu sa nepodarilo odstrániť.",
     };
   }
 }
