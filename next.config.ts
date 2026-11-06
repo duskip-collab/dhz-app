@@ -4,6 +4,9 @@ const nextConfig: NextConfig = {
   /* config options here */
   experimental: {
     agentFeedback: true,
+    serverActions: {
+      bodySizeLimit: "6mb",
+    },
   },
   // O2: Cache Components vypnuté – App Router používa klasické dynamické
   // vykresľovanie cez cookies(). Cookie-based auth (middleware + Server

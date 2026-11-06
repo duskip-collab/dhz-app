@@ -322,7 +322,7 @@ export async function uploadMemberPhotoAction(
   try {
     const { getAuthContext, hasPermissionServer } = await import("@/lib/auth/server");
     const { PERMISSIONS } = await import("@/lib/auth/permissions");
-    const { getMemberById, updateMember } = await import("@/lib/members/members.service");
+    const { getMemberById, replaceMemberPhotoPath } = await import("@/lib/members/members.service");
     const { createClient } = await import("@/lib/supabase/server");
 
     const ctx = await getAuthContext();
@@ -331,11 +331,11 @@ export async function uploadMemberPhotoAction(
       (await hasPermissionServer(ctx.userId, PERMISSIONS.MEMBERS_EDIT));
     if (!ok) return { ok: false, errors: {}, message: "Nemáte oprávnenie." };
 
-    await getMemberById(memberId);
+    const member = await getMemberById(memberId);
 
     const supabase = await createClient();
     const ext = file.type === "image/png" ? "png" : file.type === "image/webp" ? "webp" : "jpg";
-    const path = `${memberId}/${Date.now()}.${ext}`;
+    const path = `${memberId}/${crypto.randomUUID()}.${ext}`;
 
     const bytes = new Uint8Array(await file.arrayBuffer());
     const { error: upErr } = await supabase.storage.from(PHOTO_BUCKET).upload(path, bytes, {
@@ -343,17 +343,63 @@ export async function uploadMemberPhotoAction(
       upsert: false,
     });
     if (upErr) {
+      console.error("[uploadMemberPhotoAction] Storage upload error:", upErr);
       return { ok: false, errors: { photo: "Nahrávanie zlyhalo." }, message: "Nahrávanie zlyhalo." };
     }
 
-    await updateMember(memberId, { photo_path: path });
+    try {
+      await replaceMemberPhotoPath(memberId, member.photo_path, path);
+    } catch (e) {
+      try {
+        const { error: cleanupError } = await supabase.storage.from(PHOTO_BUCKET).remove([path]);
+        if (cleanupError) {
+          console.error("[uploadMemberPhotoAction] Failed to remove unreferenced upload:", {
+            path,
+            error: cleanupError,
+          });
+        }
+      } catch (cleanupError) {
+        console.error("[uploadMemberPhotoAction] Failed to remove unreferenced upload:", {
+          path,
+          error: cleanupError,
+        });
+      }
+      throw e;
+    }
+
+    if (member.photo_path) {
+      try {
+        const { error: removeError } = await supabase.storage
+          .from(PHOTO_BUCKET)
+          .remove([member.photo_path]);
+        if (removeError) {
+          console.error("[uploadMemberPhotoAction] Failed to remove replaced photo:", {
+            path: member.photo_path,
+            error: removeError,
+          });
+        }
+      } catch (removeError) {
+        console.error("[uploadMemberPhotoAction] Failed to remove replaced photo:", {
+          path: member.photo_path,
+          error: removeError,
+        });
+      }
+    }
 
     revalidatePath("/members");
     revalidatePath(`/members/${memberId}`);
+    revalidatePath(`/members/${memberId}/edit`);
     return { ok: true, memberId };
   } catch (e) {
     if ((e as { statusCode?: number }).statusCode === 403) {
       return { ok: false, errors: {}, message: "Nemáte oprávnenie." };
+    }
+    if ((e as { statusCode?: number }).statusCode === 409) {
+      return {
+        ok: false,
+        errors: { photo: "Fotografia sa medzitým zmenila. Skúste nahrávanie znova." },
+        message: "Fotografia sa medzitým zmenila. Skúste nahrávanie znova.",
+      };
     }
     return { ok: false, errors: {}, message: "Nahrávanie zlyhalo." };
   }

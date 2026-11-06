@@ -923,6 +923,44 @@ export async function deleteMemberGuardian(memberId: string, guardianId: string)
 
 const MEMBER_PHOTO_BUCKET = "member-photos";
 
+export async function replaceMemberPhotoPath(
+  memberId: string,
+  expectedPhotoPath: string | null,
+  photoPath: string
+): Promise<void> {
+  const ctx = await requireAuthenticated();
+  const hasEdit =
+    checkPermission(ctx, PERMISSIONS.MEMBERS_EDIT) ||
+    (await checkPermissionServer(ctx.userId, PERMISSIONS.MEMBERS_EDIT));
+
+  if (!hasEdit) {
+    throw createAuthError(403, "Nemáte oprávnenie na upravovanie člena.");
+  }
+
+  const supabase = await createClient();
+  const updateQuery = supabase
+    .from("members")
+    .update({
+      photo_path: photoPath,
+      updated_by: ctx.userId,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", memberId);
+
+  const { data, error } =
+    expectedPhotoPath === null
+      ? await updateQuery.is("photo_path", null).select("id").maybeSingle()
+      : await updateQuery.eq("photo_path", expectedPhotoPath).select("id").maybeSingle();
+
+  if (error) {
+    console.error("[replaceMemberPhotoPath] Supabase error:", error);
+    throw createAuthError(500, "Chyba pri ukladaní fotografie člena.");
+  }
+  if (!data) {
+    throw createAuthError(409, "Fotografia člena sa medzitým zmenila.");
+  }
+}
+
 /**
  * getMemberPhotoUrl – časovo obmedzená Signed URL fotografie člena.
  * Vyžaduje `members.view`. Nevracia verejnú URL.

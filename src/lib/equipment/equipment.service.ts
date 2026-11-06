@@ -581,6 +581,42 @@ export async function updateEquipmentItem(
   return item;
 }
 
+export async function replaceEquipmentPhotoPath(
+  equipmentId: string,
+  expectedPhotoPath: string | null,
+  photoPath: string
+): Promise<void> {
+  const ctx = await requireAuthenticated();
+  const canEdit =
+    ctx.permissions.includes(PERMISSIONS.INVENTORY_EDIT) ||
+    (await hasPermissionServer(ctx.userId, PERMISSIONS.INVENTORY_EDIT));
+  const canManage =
+    ctx.permissions.includes(PERMISSIONS.INVENTORY_MANAGE) ||
+    (await hasPermissionServer(ctx.userId, PERMISSIONS.INVENTORY_MANAGE));
+  if (!canEdit && !canManage) {
+    throw createAuthError(403, "Nemáte oprávnenie na upravovanie inventára.");
+  }
+
+  const supabase = await createClient();
+  const updateQuery = supabase
+    .from("equipment_items")
+    .update({ photo_path: photoPath })
+    .eq("id", equipmentId);
+
+  const { data, error } =
+    expectedPhotoPath === null
+      ? await updateQuery.is("photo_path", null).select("id").maybeSingle()
+      : await updateQuery.eq("photo_path", expectedPhotoPath).select("id").maybeSingle();
+
+  if (error) {
+    console.error("[replaceEquipmentPhotoPath] Supabase error:", error);
+    throw createAuthError(500, "Chyba pri ukladaní fotografie položky.");
+  }
+  if (!data) {
+    throw createAuthError(409, "Fotografia položky sa medzitým zmenila.");
+  }
+}
+
 
 // =============================================================================
 // WRITE – assignEquipmentToMember

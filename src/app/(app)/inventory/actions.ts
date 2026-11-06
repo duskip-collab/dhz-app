@@ -10,6 +10,7 @@ import {
   addMaintenanceLog,
   deleteEquipmentItem,
   getEquipmentById,
+  replaceEquipmentPhotoPath,
 } from "@/lib/equipment/equipment.service";
 import {
   isEquipmentStatus,
@@ -314,16 +315,20 @@ export async function uploadEquipmentPhotoAction(
     const { createClient } = await import("@/lib/supabase/server");
 
     const ctx = await getAuthContext();
-    const ok =
+    const canEdit =
       ctx.permissions.includes(PERMISSIONS.INVENTORY_EDIT) ||
       (await hasPermissionServer(ctx.userId, PERMISSIONS.INVENTORY_EDIT));
+    const canManage =
+      ctx.permissions.includes(PERMISSIONS.INVENTORY_MANAGE) ||
+      (await hasPermissionServer(ctx.userId, PERMISSIONS.INVENTORY_MANAGE));
+    const ok = canEdit || canManage;
     if (!ok) return fail("Nemáte oprávnenie.", {});
 
-    await getEquipmentById(equipmentId);
+    const equipment = await getEquipmentById(equipmentId);
 
     const supabase = await createClient();
     const ext = file.type === "image/png" ? "png" : file.type === "image/webp" ? "webp" : "jpg";
-    const path = `${equipmentId}/${Date.now()}.${ext}`;
+    const path = `${equipmentId}/${crypto.randomUUID()}.${ext}`;
 
     const bytes = new Uint8Array(await file.arrayBuffer());
     const { error: upErr } = await supabase.storage.from(PHOTO_BUCKET).upload(path, bytes, {
@@ -331,14 +336,48 @@ export async function uploadEquipmentPhotoAction(
       upsert: false,
     });
     if (upErr) {
+      console.error("[uploadEquipmentPhotoAction] Storage upload error:", upErr);
       return fail("Nahrávanie zlyhalo.", { photo: "Nahrávanie zlyhalo." });
     }
 
-    await updateEquipmentItem(equipmentId, { photo_path: path } as never, null).catch(async (e) => {
-      // kompenzácia: pri zlyhaní DB zápisu odstránime nahratý objekt
-      await supabase.storage.from(PHOTO_BUCKET).remove([path]);
+    try {
+      await replaceEquipmentPhotoPath(equipmentId, equipment.photo_path, path);
+    } catch (e) {
+      try {
+        const { error: cleanupError } = await supabase.storage.from(PHOTO_BUCKET).remove([path]);
+        if (cleanupError) {
+          console.error("[uploadEquipmentPhotoAction] Failed to remove unreferenced upload:", {
+            path,
+            error: cleanupError,
+          });
+        }
+      } catch (cleanupError) {
+        console.error("[uploadEquipmentPhotoAction] Failed to remove unreferenced upload:", {
+          path,
+          error: cleanupError,
+        });
+      }
       throw e;
-    });
+    }
+
+    if (equipment.photo_path) {
+      try {
+        const { error: removeError } = await supabase.storage
+          .from(PHOTO_BUCKET)
+          .remove([equipment.photo_path]);
+        if (removeError) {
+          console.error("[uploadEquipmentPhotoAction] Failed to remove replaced photo:", {
+            path: equipment.photo_path,
+            error: removeError,
+          });
+        }
+      } catch (removeError) {
+        console.error("[uploadEquipmentPhotoAction] Failed to remove replaced photo:", {
+          path: equipment.photo_path,
+          error: removeError,
+        });
+      }
+    }
 
     revalidatePath("/inventory");
     revalidatePath(`/inventory/${equipmentId}`);
@@ -348,6 +387,11 @@ export async function uploadEquipmentPhotoAction(
   } catch (e) {
     if ((e as { statusCode?: number }).statusCode === 403) {
       return fail("Nemáte oprávnenie.", {});
+    }
+    if ((e as { statusCode?: number }).statusCode === 409) {
+      return fail("Fotografia sa medzitým zmenila. Skúste nahrávanie znova.", {
+        photo: "Fotografia sa medzitým zmenila. Skúste nahrávanie znova.",
+      });
     }
     return fail("Nahrávanie zlyhalo.", {});
   }
@@ -385,4 +429,3 @@ export async function deleteInventoryItemAction(formData: FormData): Promise<voi
     redirect(`/inventory?${params.toString()}`);
   }
 }
-
