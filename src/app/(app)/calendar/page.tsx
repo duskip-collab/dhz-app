@@ -53,9 +53,47 @@ export default async function Page({
     ? events.filter((e) => selectedTypes.has(e.type))
     : events;
 
+  // Calendar navigation state
+  const [currentDate, setCurrentDate] = React.useState<Date>(new Date());
+
+  // Search state
+  const [searchQuery, setSearchQuery] = React.useState("");
+
+  // Compute month/year display
+  const monthYear = currentDate.toLocaleDateString("sk-SK", {
+    month: "long",
+    year: "numeric",
+  });
+
+  // Navigation functions
+  const goToPrevMonth = () =>
+    setCurrentDate((prev) => {
+      const d = new Date(prev);
+      d.setMonth(d.getMonth() - 1);
+      return d;
+    });
+
+  const goToNextMonth = () =>
+    setCurrentDate((prev) => {
+      const d = new Date(prev);
+      d.setMonth(d.getMonth() + 1);
+      return d;
+    });
+
+  const goToToday = () => setCurrentDate(new Date());
+
+  // Filter events for current month
+  const currentMonthEvents = React.useMemo(() => {
+    const month = currentDate.getMonth() + 1;
+    const year = currentDate.getFullYear();
+    return events.filter(
+      (ev) => new Date(ev.start_at).getMonth() + 1 === month && new Date(ev.start_at).getFullYear() === year
+    );
+  ), [events, currentDate]);
+
   // Zoskupenie podľa dňa.
   const byDay = new Map<string, UnifiedCalendarEvent[]>();
-  for (const ev of filteredEvents) {
+  for (const ev of currentMonthEvents) {
     const day = ev.start_at.slice(0, 10);
     const list = byDay.get(day) ?? [];
     list.push(ev);
@@ -80,6 +118,51 @@ export default async function Page({
         <p className="mt-1 text-sm text-gray-500">
           Centrálny prehľad akcií, brigád, súťaží, školení, revízií a porúch z celého systému.
         </p>
+
+        {/* Calendar navigation */}
+        <div className="flex items-center gap-2 mt-2">
+          <button
+            onClick={goToPrevMonth}
+            className="rounded-lg bg-white px-3 py-2 text-sm text-gray-600 hover:bg-gray-100 transition"
+            aria-label="Predchádzajúci mesiac"
+          >
+            <svg
+              className="h-4 w-4"
+              viewBox="0 0 20 20"
+              fill="currentColor"
+            >
+              <path d="M9.66 5.4a.8.8 0 0 1 .66-.2l4.99 3.69a.8.8 0 0 1-.09 1.61L14.3 11l-4.66 3.66a.8.8 0 0 1-1.18-.08l-5.03-3.71a.8.8 0 0 1-.2-.66zM9.83 15.6a.8.8 0 0 0 .66.2l5.03 3.71a.8.8 0 0 0 .09-1.61L6.7 9 2.24 5.34a.8.8 0 0 1-1.18.08l-5.03 3.71a.8.8 0 0 1-.2.66zM10.17 4.4a.8.8 0 0 1 .66-.2l4.99-3.69a.8.8 0 0 1 .09-1.61L5.7 9l4.56 3.34a.8.8 0 0 1 1.18.08l4.99-3.69a.8.8 0 0 1 .2.66z" />
+            </svg>
+          </button>
+
+          <span className="text-sm text-gray-600">
+            {monthYear}
+            {selectedTypes && selectedTypes.size > 0 ? ` (filter: ${[...selectedTypes].map((k) => legend.find((l) => l.key === k)?.label || k).join(", ")})` : ""}
+          </span>
+
+          <button
+            onClick={goToNextMonth}
+            className="rounded-lg bg-white px-3 py-2 text-sm text-gray-600 hover:bg-gray-100 transition"
+            aria-label="Nasledujúci mesiac"
+          >
+            <svg
+              className="h-4 w-4"
+              viewBox="0 0 20 20"
+              fill="currentColor"
+            >
+              <path d="M10.34 14.6a.8.8 0 0 0 .66.2l-4.99-3.69a.8.8 0 0 0 .09-1.61L5.7 9l4.66-3.66a.8.8 0 0 0 1.18.08l5.03 3.71a.8.8 0 0 1 .2.66zM9.93 5.4a.8.8 0 0 1-.66-.2l-5.03 3.71a.8.8 0 0 1 .09 1.61L6.7 11l4.66-3.66a.8.8 0 0 0 1.18-.08l-5.03-3.71a.8.8 0 0 0-.2-.66zM10.17 16.6a.8.8 0 0 1-.66.2l-4.99 3.69a.8.8 0 0 1-.09 1.61L13.3 11l-4.56-3.34a.8.8 0 0 0-1.18-.08l-4.99 3.69a.8.8 0 0 1-.2-.66zM9.83 5.4a.8.8 0 0 1 .66.2l5.03-3.71a.8.8 0 0 0 .09-1.61L13.3 9l-4.56-3.34a.8.8 0 0 0-1.18.08l-5.03 3.71a.8.8 0 0 0-.2.66z" />
+            </svg>
+          </button>
+
+          <button
+            onClick={goToToday}
+            className="rounded-lg bg-white px-3 py-2 text-sm text-gray-600 hover:bg-gray-100 transition"
+            aria-label="Dnes"
+          >
+            Dnes
+          </button>
+        </span>
+        </div>
       </div>
 
       {canManage && (
