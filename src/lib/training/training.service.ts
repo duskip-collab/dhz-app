@@ -17,6 +17,7 @@ import {
   auditAttendanceUpdate,
 } from "@/lib/audit/audit.service";
 import { createAuthError } from "@/lib/members/members.errors";
+import type { MembershipType } from "@/lib/members/members.service";
 import {
   validateCreateTraining,
   validateUpdateTraining,
@@ -389,4 +390,133 @@ export async function bulkUpdateAttendance(
     entries: parsed.data.map((e) => ({ member_id: e.member_id, status: e.status })),
   });
   return records;
+}
+
+// =============================================================================
+// EXPORT – getTrainingExportData
+// Vyžaduje `training.view`. Čítacia operácia – žiadny zápis do databázy.
+// Vráti detail tréningu + zoznam členov s ich aktuálnym stavom dochádzky
+// pre export CSV a tlač prezenčnej listiny.
+// =============================================================================
+
+export interface TrainingExportRow {
+  member_id: string;
+  first_name: string;
+  last_name: string;
+  status: AttendanceStatus;
+  note: string | null;
+}
+
+export interface TrainingExportTraining {
+  id: string;
+  title: string;
+  start_time: string;
+  end_time: string | null;
+  location: string | null;
+  trainer: { first_name: string; last_name: string } | null;
+  target_group: TrainingTargetGroup;
+}
+
+export interface TrainingExportData {
+  training: TrainingExportTraining;
+  rows: TrainingExportRow[];
+}
+
+// Mapovanie cieľovej skupiny tréningu -> typu členstva (rovnako ako na detaile tréningu).
+const GROUP_TO_MEMBERSHIP: Partial<Record<TrainingTargetGroup, MembershipType>> = {
+  ADULT: "adult",
+  YOUTH: "youth",
+  PREPARATORY: "preparatory",
+  DORAST: "dorast",
+};
+
+/**
+ * Načíta údaje tréningu pre export/tlač prezenčnej listiny.
+ * Overuje oprávnenie `training.view`. Číta len – nemení žiadne údaje.
+ */
+export async function getTrainingExportData(
+  trainingId: string
+): Promise<TrainingExportData> {
+  const ctx = await requireAuthenticated();
+  await assertPermission(ctx, PERMISSIONS.TRAINING_VIEW);
+
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("trainings")
+    .select("*, trainer:members!trainings_trainer_id_fkey(id, first_name, last_name)")
+    .eq("id", trainingId)
+    .single();
+
+  if (error) {
+    console.error("[getTrainingExportData] Supabase error:", error);
+    if (error.code === "PGRST116") throw createAuthError(404, "Tréning sa nenašiel.");
+    throw createAuthError(500, "Chyba pri načítaní tréningu.");
+  }
+
+  const training = data as Training;
+
+  const { data: attendance, error: attError } = await supabase
+    .from("training_attendance")
+    .select("*")
+    .eq("training_id", trainingId);
+
+  if (attError) {
+    console.error("[getTrainingExportData] attendance error:", attError);
+    throw createAuthError(500, "Chyba pri načítaní dochádzky.");
+  }
+
+  const attByMember = new Map<
+    string,
+    { status: AttendanceStatus; note: string | null }
+  >(
+    (attendance || []).map((a) => [a.member_id, { status: a.status, note: a.note }])
+  );
+
+  const membershipFilter = GROUP_TO_MEMBERSHIP[training.target_group];
+
+  let query = supabase
+    .from("members")
+    .select("id, first_name, last_name")
+    .eq("status", "active");
+
+  if (membershipFilter) {
+    query = query.eq("membership_type", membershipFilter);
+  }
+
+  const { data: members, error: mError } = await query;
+
+  if (mError) {
+    console.error("[getTrainingExportData] members error:", mError);
+    throw createAuthError(500, "Chyba pri načítaní členov.");
+  }
+
+  const rows: TrainingExportRow[] = (members || []).map((m) => {
+    const a = attByMember.get(m.id);
+    return {
+      member_id: m.id,
+      first_name: m.first_name,
+      last_name: m.last_name,
+      status: (a?.status ?? "ABSENT") as AttendanceStatus,
+      note: a?.note ?? null,
+    };
+  });
+
+  return {
+    training: {
+      id: training.id,
+      title: training.title,
+      start_time: training.start_time,
+      end_time: training.end_time,
+      location: training.location,
+      trainer: training.trainer
+        ? {
+            first_name: training.trainer.first_name,
+            last_name: training.trainer.last_name,
+          }
+        : null,
+      target_group: training.target_group,
+    },
+    rows,
+  };
 }

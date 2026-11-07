@@ -8,6 +8,7 @@ import {
   cancelTraining,
   deleteTraining,
   bulkUpdateAttendance,
+  getTrainingExportData,
   type TrainingStatus,
   type TrainingTargetGroup,
   type AttendanceStatus,
@@ -207,5 +208,27 @@ export async function updateAttendanceAction(
     return { ok: true, trainingId };
   } catch (e) {
     return handleError(e, "Chyba pri ukladaní dochádzky.");
+  }
+}
+
+// =============================================================================
+// EXPORT – exportTrainingAttendanceAction
+// Vyžaduje `training.view`. Čítacia operácia – žiadny zápis do databázy.
+// Slúži pre export CSV a tlač prezenčnej listiny.
+// =============================================================================
+
+export async function exportTrainingAttendanceAction(
+  trainingId: string
+): Promise<
+  | { ok: true; data: Awaited<ReturnType<typeof getTrainingExportData>> }
+  | { ok: false; error: string }
+> {
+  try {
+    const data = await getTrainingExportData(trainingId);
+    return { ok: true, data };
+  } catch (e) {
+    const message =
+      e instanceof Error ? e.message : "Chyba pri načítaní údajov na export.";
+    return { ok: false, error: message };
   }
 }

@@ -11,6 +11,7 @@ import { listMembers, type Member } from "@/lib/members/members.service";
 import { TrainingHeader } from "@/features/training/components/TrainingHeader";
 import { AttendanceManager } from "@/features/training/components/AttendanceManager";
 import { TrainingDetailActions } from "@/features/training/components/TrainingDetailActions";
+import { TrainingExportButtons } from "@/features/training/components/TrainingExportButtons";
 
 // Mapovanie cieľovej skupiny tréningu -> kategória člena pre načítanie dochádzky.
 const GROUP_TO_MEMBERSHIP: Partial<Record<TrainingTargetGroup, Member["membership_type"]>> = {
@@ -72,6 +73,8 @@ export default async function TrainingDetailPage({
       </div>
 
       <TrainingDetailActions id={training.id} />
+
+      <TrainingExportButtons trainingId={training.id} />
 
       <AttendanceManager
 
