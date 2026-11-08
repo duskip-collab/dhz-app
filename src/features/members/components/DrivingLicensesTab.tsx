@@ -30,7 +30,6 @@ function isExpiringSoon(
   if (!expiryDate) return false;
   if (isExpired(expiryDate)) return false;
 
-  const today = new Date();
   const cutoffDate = new Date();
   cutoffDate.setDate(cutoffDate.getDate() + days);
 
@@ -50,6 +49,15 @@ function getDaysUntilExpiry(expiryDate: string | null): number | null {
   return Math.ceil(diff / (1000 * 60 * 60 * 24));
 }
 
+async function fetchMemberDrivingLicenses(memberId: string): Promise<MemberDrivingLicense[]> {
+  const response = await fetch(`/api/driving-licenses?member_id=${memberId}`);
+  if (!response.ok) {
+    throw new Error('Chyba pri načítaní vodičských preukázok');
+  }
+  const data: { data?: MemberDrivingLicense[] } = await response.json();
+  return data.data ?? [];
+}
+
 interface DrivingLicensesTabProps {
   memberId: string;
   canEdit?: boolean;
@@ -66,30 +74,34 @@ export default function DrivingLicensesTab({
   const [selectedLicense, setSelectedLicense] = useState<MemberDrivingLicense | null>(null);
   const [isDeleting, setIsDeleting] = useState<string | null>(null);
 
-  // Load licenses on mount
   useEffect(() => {
-    loadLicenses();
+    let cancelled = false;
+    fetchMemberDrivingLicenses(memberId)
+      .then((data) => {
+        if (!cancelled) setLicenses(data);
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) {
+          setError(
+            err instanceof Error ? err.message : 'Chyba pri načítaní vodičských preukázok',
+          );
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [memberId]);
 
-  async function loadLicenses() {
+  async function refreshLicenses() {
     try {
-      setIsLoading(true);
-      setError(null);
-      
-      // Fetch from API endpoint instead of service layer
-      const response = await fetch(`/api/driving-licenses?member_id=${memberId}`);
-      if (!response.ok) {
-        throw new Error('Chyba pri načítaní vodičských preukázok');
-      }
-      
-      const data = await response.json();
-      setLicenses(data.data || []);
+      setLicenses(await fetchMemberDrivingLicenses(memberId));
     } catch (err) {
       setError(
         err instanceof Error ? err.message : 'Chyba pri načítaní vodičských preukázok',
       );
-    } finally {
-      setIsLoading(false);
     }
   }
 
@@ -291,7 +303,7 @@ export default function DrivingLicensesTab({
           onSave={() => {
             setShowModal(false);
             setSelectedLicense(null);
-            loadLicenses();
+            void refreshLicenses();
           }}
         />
       )}

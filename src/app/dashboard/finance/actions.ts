@@ -136,8 +136,7 @@ export async function createTransferAction(
     }
     const amountMinor = Math.round(amountEur * 100);
 
-    const rpc = (supabase.rpc as any).bind(supabase);
-    const { data: groupId, error } = await rpc("finance_create_transfer", {
+    const { data: groupId, error } = await supabase.rpc("finance_create_transfer", {
       p_from_account_id: fromAccountId,
       p_to_account_id: toAccountId,
       p_amount_minor: amountMinor,
@@ -235,4 +234,3 @@ export async function updateTransactionAction(
     return handleError(e, "Chyba pri aktualizácii transakcie.");
   }
 }
-

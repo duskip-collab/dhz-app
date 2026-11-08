@@ -4,7 +4,12 @@ import { redirect } from "next/navigation";
 import { createMeeting } from "@/lib/meetings/meetings.service";
 import type { MeetingInput } from "@/lib/meetings/meetings.validation";
 
-export async function createMeetingAction(_prev: any, formData: FormData) {
+export type MeetingActionState = { message: string } | null;
+
+export async function createMeetingAction(
+  _prev: MeetingActionState,
+  formData: FormData,
+): Promise<MeetingActionState> {
   const input: MeetingInput = {
     title: String(formData.get("title") ?? "").trim(),
     description: (formData.get("description") as string) || null,
@@ -18,9 +23,9 @@ export async function createMeetingAction(_prev: any, formData: FormData) {
   };
   try {
     await createMeeting(input);
-    revalidatePath("/meetings");
-    redirect("/meetings");
-  } catch (e: any) {
+  } catch {
     return { message: "Poradu sa nepodarilo uložiť. Skontroluj údaje a skús to znova." };
   }
+  revalidatePath("/meetings");
+  redirect("/meetings");
 }

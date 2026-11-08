@@ -4,7 +4,12 @@ import { redirect } from "next/navigation";
 import { createWorkParty } from "@/lib/work-parties/work-parties.service";
 import type { WorkPartyInput } from "@/lib/work-parties/work-parties.validation";
 
-export async function createWorkPartyAction(_prev: any, formData: FormData) {
+export type WorkPartyActionState = { message: string } | null;
+
+export async function createWorkPartyAction(
+  _prev: WorkPartyActionState,
+  formData: FormData,
+): Promise<WorkPartyActionState> {
   const input: WorkPartyInput = {
     title: String(formData.get("title") ?? "").trim(),
     description: (formData.get("description") as string) || null,
@@ -16,9 +21,9 @@ export async function createWorkPartyAction(_prev: any, formData: FormData) {
   };
   try {
     await createWorkParty(input);
-    revalidatePath("/brigades");
-    redirect("/brigades");
-  } catch (e: any) {
+  } catch {
     return { message: "Brigádu sa nepodarilo uložiť. Skontroluj údaje a skús to znova." };
   }
+  revalidatePath("/brigades");
+  redirect("/brigades");
 }

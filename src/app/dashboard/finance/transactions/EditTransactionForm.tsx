@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useCallback, useState } from "react";
+import { useActionState, useCallback } from "react";
 import { updateTransactionAction } from "@/app/dashboard/finance/actions";
 import type { FinanceActionState } from "@/app/dashboard/finance/actions";
 import { Button } from "@/components/ui/Button";
@@ -21,7 +21,6 @@ interface EditTransactionFormProps {
   };
   accounts: { id: string; name: string }[];
   categories: { id: string; name: string }[];
-  onSuccess?: () => void;
   onClose?: () => void;
 }
 
@@ -29,25 +28,18 @@ export function EditTransactionForm({
   transaction,
   accounts,
   categories,
-  onSuccess,
   onClose,
 }: EditTransactionFormProps) {
   const isDraft = transaction.status === "DRAFT";
-  const [serverActionState, formAction, pending] = useActionState<FinanceActionState | null>(updateTransactionAction as any, null);
-
-  const [formData, setFormData] = useState({
-    amount_minor: transaction.amount_minor,
-    transaction_date: transaction.transaction_date,
-    description: transaction.description ?? "",
-    counterparty: transaction.counterparty ?? "",
-    category_id: transaction.category_id ?? "",
-    document_number: transaction.document_number ?? "",
-  });
+  const [serverActionState, formAction, pending] = useActionState<FinanceActionState | null, FormData>(
+    updateTransactionAction,
+    null,
+  );
 
   const handleSubmit = useCallback(
     (e: React.FormEvent<HTMLFormElement>) => {
       e.preventDefault();
-      void formAction();
+      void formAction(new FormData(e.currentTarget));
     },
     [formAction],
   );
@@ -153,7 +145,7 @@ export function EditTransactionForm({
             name="description"
             type="text"
             required
-            defaultValue={formData.description}
+            defaultValue={transaction.description ?? ""}
             className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-transparent focus:ring-2 focus:ring-[#C62828]"
           />
         </div>
@@ -165,7 +157,7 @@ export function EditTransactionForm({
             id="edit-counterparty"
             name="counterparty"
             type="text"
-            defaultValue={formData.counterparty}
+            defaultValue={transaction.counterparty ?? ""}
             className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-transparent focus:ring-2 focus:ring-[#C62828]"
           />
         </div>
@@ -177,7 +169,7 @@ export function EditTransactionForm({
             id="edit-document"
             name="document_number"
             type="text"
-            defaultValue={formData.document_number}
+            defaultValue={transaction.document_number ?? ""}
             className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-transparent focus:ring-2 focus:ring-[#C62828]"
           />
         </div>

@@ -3,16 +3,10 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  AlertTriangle,
   Bell,
   CalendarDays,
-  FileText,
   Home,
-  Trophy,
-  User,
-  Users,
   WalletCards,
-  X,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth/client";
 import { PERMISSIONS } from "@/lib/auth/permissions";

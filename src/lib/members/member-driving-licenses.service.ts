@@ -327,7 +327,6 @@ export function isExpiringSoon(
   if (!expiryDate) return false; // No expiry date = not expiring soon
   if (isExpired(expiryDate)) return false; // Already expired
 
-  const today = new Date();
   const cutoffDate = new Date();
   cutoffDate.setDate(cutoffDate.getDate() + days);
 

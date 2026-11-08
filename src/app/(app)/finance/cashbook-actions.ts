@@ -57,7 +57,6 @@ export async function createIncomeAction(
     const counterparty = String(formData.get("counterparty") ?? "").trim() || null;
     const memberId = String(formData.get("member_id") ?? "").trim() || null;
     const documentNumber = String(formData.get("document_number") ?? "").trim() || null;
-    const note = String(formData.get("note") ?? "").trim() || null;
     const clientToken = String(formData.get("client_token") ?? "").trim() || undefined;
 
     const errors: Record<string, string> = {};
@@ -164,10 +163,8 @@ export async function createExpenseAction(
     const transactionDate = String(formData.get("transaction_date") ?? "").trim();
     const description = String(formData.get("description") ?? "").trim();
     const counterparty = String(formData.get("counterparty") ?? "").trim() || null;
-    const actionOrPurpose = String(formData.get("action_or_purpose") ?? "").trim() || null;
     const memberId = String(formData.get("member_id") ?? "").trim() || null;
     const documentNumber = String(formData.get("document_number") ?? "").trim() || null;
-    const note = String(formData.get("note") ?? "").trim() || null;
     const clientToken = String(formData.get("client_token") ?? "").trim() || undefined;
 
     const errors: Record<string, string> = {};
@@ -598,5 +595,4 @@ export async function loadCashbookEntries({
     truncated,
   };
 }
-
 

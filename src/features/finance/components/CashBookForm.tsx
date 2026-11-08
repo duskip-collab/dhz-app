@@ -6,7 +6,6 @@ import {
   createExpenseAction,
   type CashbookActionState,
 } from "@/app/(app)/finance/cashbook-actions";
-import { formatMinor } from "@/lib/finance/finance-core";
 import { Button } from "@/components/ui/Button";
 
 interface CashBookFormProps {
@@ -16,14 +15,25 @@ interface CashBookFormProps {
 }
 export function CashBookForm({ action, accounts, categories }: CashBookFormProps) {
   const serverAction = action === "income" ? createIncomeAction : createExpenseAction;
-  const [state, formAction, pending] = useActionState(serverAction, null as CashbookActionState | null);
   const [clientToken, setClientToken] = useState(() => crypto.randomUUID());
-const allowedAccountNames = ["Bankový prevod", "Hotovosť"];
-const filteredAccounts = accounts.filter((a) => allowedAccountNames.includes(a.name));
-const accountOptions = filteredAccounts.length === 2 ? filteredAccounts : accounts;
-const isIncome = action === "income";
-const defaultAccountId =
-  accountOptions.find((a) => a.name === "Bankový prevod")?.id ?? accountOptions[0]?.id ?? "";
+  const actionWithToken = useCallback(
+    async (previousState: CashbookActionState | null, formData: FormData) => {
+      const result = await serverAction(previousState, formData);
+      if (result.ok) setClientToken(crypto.randomUUID());
+      return result;
+    },
+    [serverAction],
+  );
+  const [state, formAction, pending] = useActionState(
+    actionWithToken,
+    null as CashbookActionState | null,
+  );
+  const allowedAccountNames = ["Bankový prevod", "Hotovosť"];
+  const filteredAccounts = accounts.filter((a) => allowedAccountNames.includes(a.name));
+  const accountOptions = filteredAccounts.length === 2 ? filteredAccounts : accounts;
+  const isIncome = action === "income";
+  const defaultAccountId =
+    accountOptions.find((a) => a.name === "Bankový prevod")?.id ?? accountOptions[0]?.id ?? "";
 
   return (
     <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
@@ -33,7 +43,7 @@ const defaultAccountId =
         </h3>
       </div>
       <form action={formAction} className="space-y-3">
-        <input type="hidden" name="client_token" />
+        <input type="hidden" name="client_token" value={clientToken} />
         <div className="grid gap-3 sm:grid-cols-2">
           <div>
             <label htmlFor="cc-account" className="block text-xs font-semibold text-gray-500 mb-1">
@@ -43,6 +53,7 @@ const defaultAccountId =
               id="cc-account"
               name="account_id"
               required
+              defaultValue={defaultAccountId}
               className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-transparent focus:ring-2 focus:ring-[#C62828]"
             >
               <option value="">Vyberte účet</option>

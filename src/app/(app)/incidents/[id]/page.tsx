@@ -1,4 +1,4 @@
-import { ArrowLeft, Siren, Clock, MapPin, Users, Truck } from "lucide-react";
+import { ArrowLeft, Siren, Users, Truck } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requirePermission } from "@/lib/auth/server";

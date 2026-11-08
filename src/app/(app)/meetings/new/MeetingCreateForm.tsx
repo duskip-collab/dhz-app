@@ -12,11 +12,11 @@ function SubmitButton({ pending }: { pending: boolean }) {
 }
 
 export default function MeetingCreateForm() {
-  const [state, formAction] = useActionState(createMeetingAction as any, null);
+  const [state, formAction] = useActionState(createMeetingAction, null);
   const { pending } = useFormStatus();
   return (
     <form action={formAction} className="space-y-4">
-      {(state as any)?.message && <p className="text-red-600">{(state as any).message}</p>}
+      {state?.message && <p className="text-red-600">{state.message}</p>}
       <input name="title" placeholder="Názov" required className="w-full border p-2 rounded" />
       <input name="scheduled_at" type="datetime-local" required className="w-full border p-2 rounded" />
       <input name="duration_minutes" type="number" placeholder="Dĺžka (min)" className="w-full border p-2 rounded" />

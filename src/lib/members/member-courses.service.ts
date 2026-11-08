@@ -62,7 +62,7 @@ async function requireAuthenticated() {
 export async function getMemberCourses(
   memberId: string
 ): Promise<MemberCourse[]> {
-  const ctx = await requireAuthenticated();
+  await requireAuthenticated();
 
   const supabase = await createClient();
 
@@ -87,7 +87,7 @@ export async function getMemberCourses(
 export async function getExpiringCourses(
   daysAhead: number = 30
 ): Promise<MemberCourse[]> {
-  const ctx = await requireAuthenticated();
+  await requireAuthenticated();
 
   const supabase = await createClient();
 

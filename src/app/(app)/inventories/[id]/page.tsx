@@ -5,7 +5,7 @@ import { getInventoryCheckById } from "@/lib/equipment/inventories.service";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { updateInventoryCheckAction, verifyInventoryItemAction, deleteInventoryCheckAction } from "../actions";
+import { verifyInventoryItemAction, deleteInventoryCheckAction } from "../actions";
 
 const STATUS_LABELS = { DRAFT: "Náčrt", IN_PROGRESS: "Prebieha", COMPLETED: "Hotovo", CANCELLED: "Zrušená" };
 const STATUS_TONE = { DRAFT: "blue", IN_PROGRESS: "yellow", COMPLETED: "green", CANCELLED: "gray" };
@@ -17,7 +17,7 @@ export default async function InventoryCheckDetailPage({ params }: { params: Pro
   let check;
   try {
     check = await getInventoryCheckById(id);
-  } catch (err) {
+  } catch {
     return (
       <div className="space-y-6">
         <Link href="/inventories"><Button variant="secondary" size="sm">← Späť</Button></Link>

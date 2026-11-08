@@ -42,8 +42,6 @@ export function validateDrivingLicenseInput(
   isPartial: boolean = false,
 ): { valid: boolean; errors: DrivingLicenseFormErrors } {
   const errors: DrivingLicenseFormErrors = {};
-  const root: string[] = [];
-
   // Category validation
   if (input.category !== undefined) {
     if (!input.category || input.category.trim().length === 0) {

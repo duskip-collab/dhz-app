@@ -12,6 +12,7 @@ export default defineConfig({
     globals: false,
     exclude: [
       "**/node_modules/**",
+      "e2e/**",
       "src/lib/finance/finance-core.test.ts",
       "src/lib/reports/reports.core.test.ts",
       "src/app/dashboard/finance/attachment-constants.test.ts",
@@ -24,4 +25,3 @@ export default defineConfig({
     ],
   },
 });
-

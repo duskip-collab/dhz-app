@@ -1,18 +1,12 @@
-import { Wrench } from "lucide-react";
-import Link from "next/link";
 import { requirePermission } from "@/lib/auth/server";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { getInspections, getUpcomingInspections } from "@/lib/equipment/inspections.service";
 import { getEquipmentItems } from "@/lib/equipment/equipment.service";
-import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
-import { EmptyState } from "@/components/ui/EmptyState";
 import { createInspectionAction, updateInspectionAction, deleteInspectionAction } from "./actions";
 
 const inputCls = "w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#C62828] bg-white";
 const TYPE = { STK: "STK", EK: "EK", REVISION: "Revízia", PERIODIC_CHECK: "Kontrola", SERVICE: "Servis" };
-const STATUS = { PLANNED: "Plánovaná", SCHEDULED: "Uskutočnená", IN_PROGRESS: "Prebieha", COMPLETED: "Dokončená", OVERDUE: "Prekonaná", CANCELLED: "Zrušená" };
-
 export default async function InspectionsPage({ searchParams }: { searchParams: Promise<{ [key: string]: string | string[] | undefined }> }) {
   await requirePermission(PERMISSIONS.INSPECTION_VIEW);
   const params = await searchParams;

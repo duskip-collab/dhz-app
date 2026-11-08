@@ -92,6 +92,11 @@ export const AUDIT_ACTIONS = {
   WORK_PARTY_CREATE: "work_parties:create",
   WORK_PARTY_UPDATE: "work_parties:update",
   WORK_PARTY_DELETE: "work_parties:delete",
+
+  // User administration
+  USER_ROLE_ASSIGN: "role.assign",
+  INVITATION_CREATE: "invitation.create",
+  INVITATION_REVOKE: "invitation.revoke",
 } as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS];

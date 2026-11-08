@@ -8,10 +8,11 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import Link from "next/link";
+import Image from "next/image";
 import { notFound } from "next/navigation";
 import { requirePermission } from "@/lib/auth/server";
 import { PERMISSIONS, hasPermission } from "@/lib/auth/permissions";
-import { getMemberById, getMemberPhotoUrl } from "@/lib/members/members.service";
+import { getMemberPhotoUrl } from "@/lib/members/members.service";
 import { getMemberProfile, getMemberProfileStats } from "@/lib/members/member-profile.service";
 import { MemberProfileContent } from "@/features/members/components/MemberProfilePage";
 import { DeleteMemberButton } from "@/features/members/components/DeleteMemberButton";
@@ -86,7 +87,14 @@ export default async function MemberProfilePage({
             {/* Foto */}
             <div className="h-24 w-24 shrink-0 overflow-hidden rounded-lg bg-gray-100">
               {photoUrl ? (
-                <img src={photoUrl} alt={`${profile.member.first_name} ${profile.member.last_name}`} className="h-full w-full object-cover" />
+                <Image
+                  src={photoUrl}
+                  alt={`${profile.member.first_name} ${profile.member.last_name}`}
+                  width={96}
+                  height={96}
+                  unoptimized
+                  className="h-full w-full object-cover"
+                />
               ) : (
                 <div className="flex h-full w-full items-center justify-center bg-gray-200 text-gray-400">
                   <span className="text-lg font-semibold">
@@ -154,7 +162,7 @@ export default async function MemberProfilePage({
       </div>
 
       {/* Sekcia: Prehľad */}
-      <MemberProfileContent profile={profile} photoUrl={photoUrl} stats={stats} canEdit={canEdit} />
+      <MemberProfileContent profile={profile} stats={stats} canEdit={canEdit} />
     </div>
   );
 }

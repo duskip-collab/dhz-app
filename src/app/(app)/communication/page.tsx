@@ -3,7 +3,6 @@ import { requirePermission } from "@/lib/auth/server";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { getAnnouncements } from "@/lib/announcements/announcements.service";
 import { type Announcement } from "@/lib/announcements/announcements.service";
-import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 

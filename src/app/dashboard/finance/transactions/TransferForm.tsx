@@ -11,7 +11,10 @@ interface TransferFormProps {
 }
 
 export function TransferForm({ accounts, onSuccess }: TransferFormProps) {
-  const [serverActionState, formAction, pending] = useActionState<FinanceActionState | null>(createTransferAction as any, null);
+  const [serverActionState, formAction, pending] = useActionState<FinanceActionState | null, FormData>(
+    createTransferAction,
+    null,
+  );
 
   const [formData, setFormData] = useState({
     fromAccountId: "",
@@ -25,7 +28,7 @@ export function TransferForm({ accounts, onSuccess }: TransferFormProps) {
   const handleSubmit = useCallback(
     (e: React.FormEvent<HTMLFormElement>) => {
       e.preventDefault();
-      void formAction();
+      void formAction(new FormData(e.currentTarget));
     },
     [formAction],
   );

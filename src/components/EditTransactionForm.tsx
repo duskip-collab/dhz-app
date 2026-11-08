@@ -5,23 +5,27 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 
 export interface EditTransactionFormProps {
-  accounts: any[];
+  accounts: { id: string; name: string }[];
   onSuccess: () => void;
+}
+
+interface EditTransactionState {
+  success: boolean;
 }
 
 export const EditTransactionForm = ({
   accounts,
   onSuccess,
 }: EditTransactionFormProps) => {
-  const [serverState, formMutate, isSubmitting] = useActionState<
-    any,
+  const [, formMutate, isSubmitting] = useActionState<
+    EditTransactionState,
     FormData
   >(
-    async (formData: FormData) => {
+    async (state: EditTransactionState) => {
       onSuccess();
-      return { success: true };
+      return { ...state, success: true };
     },
-    { success: false } as any
+    { success: false }
   );
 
   return (

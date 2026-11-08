@@ -1,6 +1,10 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { requirePermission } from "@/lib/auth/server";
+import { PERMISSIONS } from "@/lib/auth/permissions";
+import { createClient } from "@/lib/supabase/server";
+import { createAuthError } from "@/lib/members/members.errors";
 import {
   createTraining,
   updateTraining,
@@ -14,6 +18,7 @@ import {
   type AttendanceStatus,
   type AttendanceEntry,
 } from "@/lib/training/training.service";
+import type { Database } from "@/types/database.types";
 import {
   validateCreateTraining,
   validateUpdateTraining,
@@ -26,6 +31,48 @@ import {
 export type TrainingActionState =
   | { ok: true; trainingId?: string }
   | { ok: false; errors: Record<string, string>; message: string };
+
+interface AttendanceSummaryRow {
+  memberId: string;
+  firstName: string;
+  lastName: string;
+  totalTrainings: number;
+  present: number;
+  absent: number;
+  excused: number;
+  late: number;
+  participation: number;
+  absenceRate: number;
+}
+
+interface AttendanceSummaryCounts {
+  totalTrainings: number;
+  present: number;
+  absent: number;
+  excused: number;
+  late: number;
+  member: Pick<
+    Database["public"]["Tables"]["members"]["Row"],
+    "id" | "first_name" | "last_name"
+  >;
+}
+
+type AttendanceSummaryMember = Pick<
+  Database["public"]["Tables"]["members"]["Row"],
+  "id" | "first_name" | "last_name"
+>;
+
+type AttendanceSummaryAttendance = Pick<
+  Database["public"]["Tables"]["training_attendance"]["Row"],
+  "member_id" | "status"
+>;
+
+interface AttendanceSummaryData {
+  generatedAt: string;
+  totalMembers: number;
+  totalTrainings: number;
+  rows: AttendanceSummaryRow[];
+}
 
 function field(formData: FormData, name: string): string | null {
   const raw = formData.get(name);
@@ -243,7 +290,7 @@ export async function generateAttendanceSummaryAction(): Promise<
   | { ok: false; error: string }
 > {
   try {
-    const ctx = await requirePermission(PERMISSIONS.TRAINING_VIEW);
+    await requirePermission(PERMISSIONS.TRAINING_VIEW);
     const supabase = await createClient();
 
     // Načítaj všetky tréningy s ich Dochádzkou
@@ -268,14 +315,7 @@ export async function generateAttendanceSummaryAction(): Promise<
     }
 
     // Skupina podľa member_id a spočítaj stavové počty
-    const memberAttendanceMap: Record<string, {
-      totalTrainings: number;
-      present: number;
-      absent: number;
-      excused: number;
-      late: number;
-      member: { id: string; first_name: string; last_name: string };
-    }> = {};
+    const memberAttendanceMap: Record<string, AttendanceSummaryCounts> = {};
 
     // Inicializácia zoznamu členov z tabuľky members (aktívni)
     const { data: allMembers, error: membersError } = await supabase
@@ -290,77 +330,62 @@ export async function generateAttendanceSummaryAction(): Promise<
 
     // Inicializácia mapy pre všetkých členov
     if (allMembers) {
-      allMembers.forEach((m: any) => {
-        memberAttendanceMap[m.id] = {
+      for (const member of allMembers as AttendanceSummaryMember[]) {
+        memberAttendanceMap[member.id] = {
           totalTrainings: 0,
           present: 0,
           absent: 0,
           excused: 0,
           late: 0,
-          member: { id: m.id, first_name: m.first_name, last_name: m.last_name },
+          member,
         };
-      });
+      }
     }
 
     // Spočítaj z attendance záznamov
     if (attendance) {
-      attendance.forEach((a: any) => {
-        const mid = a.member_id;
-        if (memberAttendanceMap[mid]) {
-          memberAttendanceMap[mid].totalTrainings += 1;
-          const status = a.status;
-          if (status === 'PRESENT') {
-            memberAttendanceMap[mid].present += 1;
-          } else if (status === 'ABSENT') {
-            memberAttendanceMap[mid].absent += 1;
-          } else if (status === 'EXCUSED') {
-            memberAttendanceMap[mid].excused += 1;
-          } else if (status === 'LATE') {
-            memberAttendanceMap[mid].late += 1;
-          }
+      for (const record of attendance as AttendanceSummaryAttendance[]) {
+        const memberAttendance = memberAttendanceMap[record.member_id];
+        if (!memberAttendance) continue;
+
+        memberAttendance.totalTrainings += 1;
+        if (record.status === "PRESENT") {
+          memberAttendance.present += 1;
+        } else if (record.status === "ABSENT") {
+          memberAttendance.absent += 1;
+        } else if (record.status === "EXCUSED") {
+          memberAttendance.excused += 1;
+        } else if (record.status === "LATE") {
+          memberAttendance.late += 1;
         }
-      });
+      }
     }
 
     // Spočítaj percentá a príprav data pre výstup
-    const rows = Object.values(memberAttendanceMap).map((entry: any) => {
+    const rows: AttendanceSummaryRow[] = Object.values(memberAttendanceMap).map((entry) => {
       const total = entry.totalTrainings;
-      const participation = total > 0 ? (entry.present / total) * 100 : 0;
       return {
-        ...entry,
-        participation,
+        memberId: entry.member.id,
+        firstName: entry.member.first_name,
+        lastName: entry.member.last_name,
+        totalTrainings: total,
+        present: entry.present,
+        absent: entry.absent,
+        excused: entry.excused,
+        late: entry.late,
+        participation: total > 0 ? (entry.present / total) * 100 : 0,
         absenceRate: total > 0 ? ((entry.absent + entry.excused + entry.late) / total) * 100 : 0,
       };
     });
 
     // Seďries podľa prítomnosti (nestrafo)
-    rows.sort((a: any, b: any) => b.present - a.present);
-
-    interface AttendanceSummaryRow {
-      memberId: string;
-      firstName: string;
-      lastName: string;
-      totalTrainings: number;
-      present: number;
-      absent: number;
-      excused: number;
-      late: number;
-      participation: number;
-      absenceRate: number;
-    }
-
-    interface AttendanceSummaryData {
-      generatedAt: string;
-      totalMembers: number;
-      totalTrainings: number;
-      rows: AttendanceSummaryRow[];
-    }
+    rows.sort((a, b) => b.present - a.present);
 
     const data: AttendanceSummaryData = {
       generatedAt: new Date().toISOString(),
       totalMembers: rows.length,
       totalTrainings: (trainings || []).length,
-      rows: rows as AttendanceSummaryRow[],
+      rows,
     };
 
     return { ok: true, data };

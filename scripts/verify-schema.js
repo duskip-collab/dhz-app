@@ -25,7 +25,7 @@ async function verifySchema() {
   try {
     // 1. Check members table columns
     console.log('1️⃣  Checking members table columns...');
-    const { data: columns, error: columnsError } = await supabase.rpc('get_table_columns', {
+    const { error: columnsError } = await supabase.rpc('get_table_columns', {
       table_name: 'members'
     });
 
@@ -74,7 +74,7 @@ async function verifySchema() {
 
     // 2. Check member_guardians table
     console.log('\n2️⃣  Checking member_guardians table...');
-    const { data: guardians, error: guardiansError } = await supabase
+    const { error: guardiansError } = await supabase
       .from('member_guardians')
       .select('*')
       .limit(1);

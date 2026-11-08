@@ -6,8 +6,6 @@ import { hasPermissionServer } from "@/lib/auth/server";
 import {
   OrgDocument,
   OrgDocumentCategory,
-  ORG_DOCUMENT_CATEGORY_LABELS,
-  isOrgDocumentCategory,
 } from "./org-documents.types";
 
 const DOC_BUCKET = "org_documents";

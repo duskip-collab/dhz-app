@@ -3,7 +3,7 @@ import { createAuthError } from "@/lib/members/members.errors";
 import { requireAuthenticated } from "../documents/org-documents.auth";
 import { PERMISSIONS, VISIBILITY_PERMISSIONS } from "@/lib/auth/permissions";
 import { APP_ROLES, type AppRole, ROLE_LABELS, isAppRole } from "@/lib/auth/roles";
-import { logSecurityEvent, AUDIT_MODULES } from "@/lib/audit/audit.service";
+import { logSecurityEvent, AUDIT_MODULES, AUDIT_ACTIONS } from "@/lib/audit/audit.service";
 import {
   createInvitation,
   revokeInvitation,
@@ -247,7 +247,7 @@ export async function setUserRole(userId: string, roleCode: AppRole): Promise<vo
   await logSecurityEvent({
     userId: ctx.userId,
     module: AUDIT_MODULES.USERS,
-    action: "role.assign" as any,
+    action: AUDIT_ACTIONS.USER_ROLE_ASSIGN,
     objectId: userId,
     data: { role_code: roleCode, target_user_id: userId },
   });
@@ -373,7 +373,7 @@ export async function generateMemberAccessCodeForMember(
   await logSecurityEvent({
     userId: ctx.userId,
     module: AUDIT_MODULES.USERS,
-    action: "invitation.create" as any,
+    action: AUDIT_ACTIONS.INVITATION_CREATE,
     objectId: created.invitation.id,
     data: { member_id: memberId, role_code: roleCode },
   });
@@ -412,7 +412,7 @@ export async function revokeMemberAccessForMember(memberId: string): Promise<voi
   await logSecurityEvent({
     userId: ctx.userId,
     module: AUDIT_MODULES.USERS,
-    action: "invitation.revoke" as any,
+    action: AUDIT_ACTIONS.INVITATION_REVOKE,
     objectId: invitations.id,
     data: { member_id: memberId },
   });

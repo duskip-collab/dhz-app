@@ -12,11 +12,11 @@ function SubmitButton({ pending }: { pending: boolean }) {
 }
 
 export default function WorkPartyCreateForm() {
-  const [state, formAction] = useActionState(createWorkPartyAction as any, null);
+  const [state, formAction] = useActionState(createWorkPartyAction, null);
   const { pending } = useFormStatus();
   return (
     <form action={formAction} className="space-y-4">
-      {(state as any)?.message && <p className="text-red-600">{(state as any).message}</p>}
+      {state?.message && <p className="text-red-600">{state.message}</p>}
       <input name="title" placeholder="Názov" required className="w-full border p-2 rounded" />
       <input name="work_date" type="datetime-local" required className="w-full border p-2 rounded" />
       <input name="duration_hours" type="number" step="0.5" placeholder="Dĺžka (h)" className="w-full border p-2 rounded" />

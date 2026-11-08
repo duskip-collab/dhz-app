@@ -4,7 +4,6 @@ import { requirePermission } from "@/lib/auth/server";
 import { PERMISSIONS, hasPermission } from "@/lib/auth/permissions";
 import {
   getFinanceLedger,
-  LEDGER_MAX_ROWS,
   type FinanceLedgerReport,
 } from "@/lib/reports/finance-ledger.service";
 import { createClient } from "@/lib/supabase/server";

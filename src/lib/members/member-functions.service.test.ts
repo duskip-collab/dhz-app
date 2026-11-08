@@ -28,7 +28,6 @@ import {
   assignMemberFunction,
   endMemberFunction,
   getMemberFunctionCatalog,
-  getMemberFunctions,
 } from "./member-functions.service";
 
 function mockSupabase(overrides: Record<string, unknown> = {}) {

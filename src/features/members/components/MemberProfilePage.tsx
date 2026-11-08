@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Calendar, Briefcase, Trophy, Heart, FileText, AlertCircle, CheckCircle, Clock, XCircle, BookOpen, Zap } from 'lucide-react';
+import { Calendar, Briefcase, Trophy, Heart, AlertCircle, CheckCircle, Clock, XCircle, BookOpen, Zap } from 'lucide-react';
 import type { MemberGuardian } from '@/lib/members/members.service';
 import type {
   MemberProfile,
@@ -53,12 +53,10 @@ const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
 
 export function MemberProfileContent({
   profile,
-  photoUrl,
   stats,
   canEdit = false,
 }: {
   profile: MemberProfile;
-  photoUrl: string | null;
   stats: MemberProfileStats;
   canEdit?: boolean;
 }) {

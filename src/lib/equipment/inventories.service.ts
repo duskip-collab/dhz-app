@@ -14,7 +14,6 @@ import {
   validateInventoryCheckUpdate,
   validateInventoryCheckItem,
   type InventoryCheckInput,
-  type InventoryCheckUpdate,
   type InventoryCheckItemVerify,
   type InventoryCheckStatusValue,
 } from "./inventories.validation";

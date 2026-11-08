@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname, useRouter } from "next/navigation";
-import { ArrowLeft, Menu, X } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 
 interface PageHeaderProps {
   title: string;
