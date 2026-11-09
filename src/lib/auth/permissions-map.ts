@@ -70,3 +70,24 @@ export function mapPermissionCodes(
     .filter((code): code is string => code !== null)
     .filter(isPermission);
 }
+
+/**
+ * Vypočíta efektívne (koncové) oprávnenie používateľa.
+ *
+ * Efektívne = (opravnenia z rolí ∪ priame individuálne granty) \ odobratia (denials).
+ * Čistá, unit-testovateľná funkcia. Výsledok musí byť konzistentný s
+ * public.has_permission() v databáze a s getAuthContext() v server.ts.
+ *
+ * @param rolePermissions oprávnenia zdedené z priradených rolí
+ * @param directPermissions priame individuálne granty (user_permissions)
+ * @param deniedPermissions explicitné odobratia (user_permission_denials)
+ */
+export function computeEffectivePermissions(
+  rolePermissions: readonly Permission[],
+  directPermissions: readonly Permission[],
+  deniedPermissions: readonly Permission[],
+): Permission[] {
+  const granted = new Set([...rolePermissions, ...directPermissions]);
+  const denied = new Set(deniedPermissions);
+  return Array.from(granted).filter((p) => !denied.has(p));
+}

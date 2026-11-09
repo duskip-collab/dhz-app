@@ -8,8 +8,13 @@ import {
   generateMemberAccessCodeForMember,
   revokeMemberAccessForMember,
   getMemberInvitationStatus,
+  loadMemberAccessDetail,
+  saveMemberAccess,
+  generateActivationCode,
+  revokeActivationCode,
+  listActivationCodesForMember,
 } from "@/lib/admin/admin.service";
-import { PERMISSIONS } from "@/lib/auth/permissions";
+import { PERMISSIONS, type Permission } from "@/lib/auth/permissions";
 import { getAuthContext } from "@/lib/auth/server";
 import { isAppRole } from "@/lib/auth/roles";
 
@@ -204,5 +209,165 @@ export async function getMemberInvitationStatusAction(
     return { ok: true, message: "Stav prístupu načítaný.", data: status };
   } catch (e) {
     return fail(statusMessage(e, "Chyba pri načítaní stavu prístupu."));
+  }
+}
+
+/**
+ * loadMemberAccessDetailAction – vráti detail prístupu člena (rola, oprávnenia, kódy).
+ */
+export async function loadMemberAccessDetailAction(
+  _prev: AdminActionState | null,
+  formData: FormData
+): Promise<AdminActionState & { data?: unknown }> {
+  const memberId = String(formData.get("member_id") ?? "").trim();
+  if (!memberId) {
+    return fail("Chýba identifikátor člena.");
+  }
+
+  try {
+    await ensureAdminGate();
+    const detail = await loadMemberAccessDetail(memberId);
+    return { ok: true, message: "Detail prístupu načítaný.", data: detail };
+  } catch (e) {
+    return fail(statusMessage(e, "Chyba pri načítaní detailu prístupu."));
+  }
+}
+
+/**
+ * saveMemberAccessAction – uloží rolu a individuálne oprávnenia člena (atomicky).
+ * FormData: member_id, role_code, grant_permissions (JSON), deny_permissions (JSON)
+ */
+export async function saveMemberAccessAction(
+  _prev: AdminActionState | null,
+  formData: FormData
+): Promise<AdminActionState> {
+  const memberId = String(formData.get("member_id") ?? "").trim();
+  const roleCode = String(formData.get("role_code") ?? "").trim();
+  const grantRaw = String(formData.get("grant_permissions") ?? "[]").trim();
+  const denyRaw = String(formData.get("deny_permissions") ?? "[]").trim();
+
+  if (!memberId || !roleCode) {
+    return fail("Chýbajú povinné údaje.");
+  }
+  if (!isAppRole(roleCode)) {
+    return fail("Neplatný kód role.");
+  }
+
+  let grantPermissions: Permission[] = [];
+  let denyPermissions: Permission[] = [];
+  try {
+    grantPermissions = JSON.parse(grantRaw);
+    denyPermissions = JSON.parse(denyRaw);
+  } catch {
+    return fail("Neplatný zoznam oprávnení.");
+  }
+
+  try {
+    await ensureAdminGate();
+    await saveMemberAccess(memberId, {
+      roleCode: roleCode as AppRole,
+      grantPermissions,
+      denyPermissions,
+    });
+    revalidatePath("/admin");
+    return { ok: true, message: "Prístupy boli uložené." };
+  } catch (e) {
+    return fail(statusMessage(e, "Chyba pri ukladaní prístupov."));
+  }
+}
+
+/**
+ * generateActivationCodeAction – vygeneruje aktivačný kód pre člena.
+ * FormData: member_id, role_code, permissions (JSON), validity_days, max_uses
+ */
+export async function generateActivationCodeAction(
+  _prev: AdminActionState | null,
+  formData: FormData
+): Promise<AdminActionState> {
+  const memberId = String(formData.get("member_id") ?? "").trim();
+  const roleCode = String(formData.get("role_code") ?? "").trim();
+  const permRaw = String(formData.get("permissions") ?? "[]").trim();
+  const validityDaysRaw = String(formData.get("validity_days") ?? "14").trim();
+  const maxUsesRaw = String(formData.get("max_uses") ?? "1").trim();
+
+  if (!memberId || !roleCode) {
+    return fail("Chýbajú povinné údaje.");
+  }
+  if (!isAppRole(roleCode)) {
+    return fail("Neplatný kód role.");
+  }
+
+  let permissions: Permission[] = [];
+  let validityDays = 14;
+  let maxUses = 1;
+  try {
+    permissions = JSON.parse(permRaw);
+    validityDays = Number.parseInt(validityDaysRaw, 10) || 14;
+    maxUses = Number.parseInt(maxUsesRaw, 10) || 1;
+  } catch {
+    return fail("Neplatné parametre kódu.");
+  }
+
+  try {
+    await ensureAdminGate();
+    const result = await generateActivationCode({
+      memberId,
+      roleCode: roleCode as AppRole,
+      permissions,
+      validityDays,
+      maxUses,
+    });
+    revalidatePath("/admin");
+    return {
+      ok: true,
+      message: "Aktivačný kód bol vygenerovaný.",
+      data: { code: result.code, invitationId: result.invitationId, expiresAt: result.expiresAt },
+    };
+  } catch (e) {
+    return fail(statusMessage(e, "Chyba pri generovaní aktivačného kódu."));
+  }
+}
+
+/**
+ * revokeActivationCodeAction – zruší aktívny aktivačný kód člena.
+ * FormData: member_id
+ */
+export async function revokeActivationCodeAction(
+  _prev: AdminActionState | null,
+  formData: FormData
+): Promise<AdminActionState> {
+  const memberId = String(formData.get("member_id") ?? "").trim();
+  if (!memberId) {
+    return fail("Chýba identifikátor člena.");
+  }
+
+  try {
+    await ensureAdminGate();
+    await revokeActivationCode(memberId);
+    revalidatePath("/admin");
+    return { ok: true, message: "Aktivačný kód bol zrušený." };
+  } catch (e) {
+    return fail(statusMessage(e, "Chyba pri rušení aktivačného kódu."));
+  }
+}
+
+/**
+ * listActivationCodesForMemberAction – zoznam kódov člena.
+ */
+export async function listActivationCodesForMemberAction(
+  _prev: AdminActionState | null,
+  formData: FormData
+): Promise<AdminActionState & { data?: unknown }> {
+  const memberId = String(formData.get("member_id") ?? "").trim();
+  if (!memberId) {
+    return fail("Chýba identifikátor člena.");
+  }
+
+  try {
+    await ensureAdminGate();
+    const codes = await listActivationCodesForMember(memberId);
+    return { ok: true, message: "Kódy načítané.", data: codes };
+  } catch (e) {
+    return fail(statusMessage(e, "Chyba pri načítaní aktivačných kódov."));
   }
 }

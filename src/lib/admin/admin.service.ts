@@ -1,8 +1,13 @@
 import { createClient } from "@/lib/supabase/server";
 import { createAuthError } from "@/lib/members/members.errors";
 import { requireAuthenticated } from "../documents/org-documents.auth";
-import { PERMISSIONS, VISIBILITY_PERMISSIONS } from "@/lib/auth/permissions";
+import { PERMISSIONS, type Permission, VISIBILITY_PERMISSIONS } from "@/lib/auth/permissions";
 import { APP_ROLES, type AppRole, ROLE_LABELS, isAppRole } from "@/lib/auth/roles";
+import {
+  computeEffectivePermissions,
+  mapPermissionCodes,
+  mapRoleCodes,
+} from "@/lib/auth/permissions-map";
 import { logSecurityEvent, AUDIT_MODULES, AUDIT_ACTIONS } from "@/lib/audit/audit.service";
 import {
   createInvitation,
@@ -230,8 +235,12 @@ export async function setUserRole(userId: string, roleCode: AppRole): Promise<vo
   if (userId === ctx.userId && roleCode === APP_ROLES.ADMIN) {
     throw createAuthError(403, "Self-escalation nie je povolená.");
   }
-  if (roleCode === APP_ROLES.ADMIN) {
-    throw createAuthError(403, "Pridelenie ADMIN vyžaduje samostatný schválený bootstrap.");
+  // ADMIN rola je osobitne chránená: iba volajúci s rolu ADMIN smie člena na ADMIN povýšiť.
+  if (roleCode === APP_ROLES.ADMIN && !ctx.roles.includes(APP_ROLES.ADMIN)) {
+    throw createAuthError(
+      403,
+      "Pridelenie roly ADMIN smie vykonat iba používateľ s rolu ADMIN.",
+    );
   }
 
   const supabase = await createClient();
@@ -486,3 +495,549 @@ async function getPermissionId(code: string): Promise<string> {
   if (!data) throw createAuthError(404, "Nenájdené oprávnenie.");
   return data.id;
 }
+
+// ============================================================================
+// K24 – PRÍSTUPOVÉ OPRÁVNENIA ČLENA (detail + uloženie)
+// ============================================================================
+
+export interface MemberPermissionEntry {
+  code: Permission;
+  name: string;
+  source: "inherited" | "granted" | "denied" | "none";
+}
+
+export interface MemberAccessDetail {
+  member: AdminMemberRow;
+  role: AppRole | null;
+  permissions: MemberPermissionEntry[];
+  activationCodes: ActivationCodeRow[];
+}
+
+export interface ActivationCodeRow {
+  id: string;
+  role: AppRole;
+  status: string;
+  use_count: number;
+  max_uses: number;
+  expires_at: string;
+  created_at: string;
+}
+
+/**
+ * K24.2/K24.4 – Načíta prístupový detail člena s rozlíšením zdroja oprávnení.
+ * Zdroj: inherited (z roly), granted (individuálne pridané), denied (individuálne odobrané), none.
+ */
+export async function loadMemberAccessDetail(
+  memberId: string,
+): Promise<MemberAccessDetail> {
+  const ctx = await requireAuthenticated();
+  assertAdminGate(ctx);
+
+  const supabase = await createClient();
+
+  const { data: member, error: memberError } = await supabase
+    .from("members")
+    .select(
+      "id, member_number, first_name, last_name, position, rank, email, status, auth_user_id",
+    )
+    .eq("id", memberId)
+    .maybeSingle();
+
+  if (memberError) {
+    console.error("[loadMemberAccessDetail] member error:", memberError);
+    throw createAuthError(500, "Chyba pri načítavaní člena.");
+  }
+  if (!member) throw createAuthError(404, "Člen sa nenašiel.");
+
+  const adminMember: AdminMemberRow = {
+    member_id: member.id,
+    member_number: member.member_number,
+    first_name: member.first_name,
+    last_name: member.last_name,
+    position: member.position,
+    rank: member.rank,
+    email: member.email,
+    status: member.status,
+    auth_user_id: member.auth_user_id,
+    has_account: !!member.auth_user_id,
+    has_access_code: false,
+  };
+
+  let role: AppRole | null = null;
+  let userRoles: AppRole[] = [];
+  let directPermissions: Permission[] = [];
+  let deniedPermissions: Permission[] = [];
+
+  if (adminMember.auth_user_id) {
+    const [rolesRes, permsRes, denialsRes] = await Promise.all([
+      supabase
+        .from("user_roles")
+        .select("roles!user_roles_role_id_fkey(code)")
+        .eq("user_id", adminMember.auth_user_id),
+      supabase
+        .from("user_permissions")
+        .select("permissions!user_permissions_permission_id_fkey(code)")
+        .eq("user_id", adminMember.auth_user_id),
+      supabase
+        .from("user_permission_denials")
+        .select(
+          "permissions!user_permission_denials_permission_id_fkey(code)",
+        )
+        .eq("user_id", adminMember.auth_user_id),
+    ]);
+
+    if (rolesRes.error) throw createAuthError(500, "Chyba pri načítaní rolí.");
+    if (permsRes.error)
+      throw createAuthError(500, "Chyba pri načítaní oprávnení.");
+    if (denialsRes.error)
+      throw createAuthError(500, "Chyba pri načítaní odobratí.");
+
+    userRoles = mapRoleCodes(
+      (rolesRes.data ?? []) as unknown as { roles: { code: string } | null }[],
+    );
+    directPermissions = mapPermissionCodes(
+      (permsRes.data ?? []) as unknown as {
+        permissions: { code: string } | null;
+      }[],
+    );
+    deniedPermissions = mapPermissionCodes(
+      (denialsRes.data ?? []) as unknown as {
+        permissions: { code: string } | null;
+      }[],
+    );
+    role = userRoles[0] ?? null;
+  }
+
+  let rolePermissions: Permission[] = [];
+  if (userRoles.length) {
+    const roleIdsRes = await supabase
+      .from("roles")
+      .select<"id">("id")
+      .in("code", userRoles);
+    if (roleIdsRes.error)
+      throw createAuthError(500, "Chyba pri načítaní ID rolí.");
+    const roleIds = ((roleIdsRes.data ?? []) as { id: string }[]).map(
+      (r) => r.id,
+    );
+    if (roleIds.length) {
+      const rpRes = await supabase
+        .from("role_permissions")
+        .select("permissions!role_permissions_permission_id_fkey(code)")
+        .in("role_id", roleIds);
+      if (rpRes.error)
+        throw createAuthError(500, "Chyba pri načítaní oprávnení rolí.");
+      rolePermissions = mapPermissionCodes(
+        (rpRes.data ?? []) as unknown as {
+          permissions: { code: string } | null;
+        }[],
+      );
+    }
+  }
+
+  const effective = computeEffectivePermissions(
+    rolePermissions,
+    directPermissions,
+    deniedPermissions,
+  );
+
+  const permissionEntries: MemberPermissionEntry[] = VISIBILITY_PERMISSIONS.map(
+    (code) => {
+      const inherited = rolePermissions.includes(code);
+      const granted = directPermissions.includes(code);
+      const denied = deniedPermissions.includes(code);
+      let source: MemberPermissionEntry["source"] = "none";
+      if (denied) source = "denied";
+      else if (granted && !inherited) source = "granted";
+      else if (inherited && !granted) source = "inherited";
+      else if (inherited && granted) source = "granted";
+
+      return {
+        code,
+        name: PERMISSION_LABELS[code] ?? code,
+        source,
+      };
+    },
+  );
+
+  const { data: codes, error: codesError } = await supabase
+    .from("invitations")
+    .select(
+      "id, role, status, use_count, max_uses, expires_at, created_at",
+    )
+    .eq("member_id", memberId)
+    .order("created_at", { ascending: false });
+
+  if (codesError) {
+    console.error("[loadMemberAccessDetail] codes error:", codesError);
+    throw createAuthError(500, "Chyba pri načítaní aktivačných kódov.");
+  }
+
+  const activationCodes: ActivationCodeRow[] = (codes ?? []).map((c) => ({
+    id: c.id,
+    role: isAppRole(c.role) ? c.role : APP_ROLES.CLEN,
+    status: c.status,
+    use_count: c.use_count,
+    max_uses: c.max_uses,
+    expires_at: c.expires_at,
+    created_at: c.created_at,
+  }));
+
+  return {
+    member: adminMember,
+    role,
+    permissions: permissionEntries,
+    activationCodes,
+  };
+}
+
+/**
+ * K24.5 – Atomické uloženie role + individuálnych oprávnení cez DB RPC transakciu.
+ * Zmeny sa ukladajú iba všetky, alebo žiadne. Záznam auditu obsahuje starú a novú rolu
+ * orazi pridané a odobrané oprávnenia.
+ */
+export interface SaveMemberAccessPayload {
+  roleCode: AppRole;
+  grantPermissions: Permission[];
+  denyPermissions: Permission[];
+}
+
+export async function saveMemberAccess(
+  memberId: string,
+  payload: SaveMemberAccessPayload,
+): Promise<void> {
+  const ctx = await requireAuthenticated();
+  // Mutácia prístupu vyžaduje admin.users (zhodu s DB RPC).
+  if (
+    !ctx.permissions.includes(PERMISSIONS.ADMIN_USERS) &&
+    !ctx.roles.includes(APP_ROLES.ADMIN)
+  ) {
+    throw createAuthError(403, "Nemáte oprávnenie na zmenu prístupov.");
+  }
+
+  const { roleCode, grantPermissions, denyPermissions } = payload;
+
+  if (!isAppRole(roleCode)) {
+    throw createAuthError(400, "Neplatný kód role.");
+  }
+  if (memberId === ctx.userId && roleCode === APP_ROLES.ADMIN) {
+    throw createAuthError(403, "Self-escalation nie je povolená.");
+  }
+  if (
+    roleCode === APP_ROLES.ADMIN &&
+    !ctx.roles.includes(APP_ROLES.ADMIN)
+  ) {
+    throw createAuthError(
+      403,
+      "Pridelenie roly ADMIN smie vykonat iba používateľ s rolu ADMIN.",
+    );
+  }
+
+  // Pôvodné hodnoty pre audit.
+  const before = await loadMemberAccessDetail(memberId).catch(() => null);
+
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("set_member_access", {
+    p_user_id: memberId,
+    p_role_code: roleCode,
+    p_grant_permissions: grantPermissions,
+    p_deny_permissions: denyPermissions,
+  });
+
+  if (error) {
+    console.error("[saveMemberAccess] RPC error:", error);
+    throw createAuthError(500, "Uloženie prístupov zlyhalo.");
+  }
+  const result = data as
+    | { success: boolean; old_role?: string; new_role?: string }
+    | null;
+  if (!result || result.success !== true) {
+    throw createAuthError(500, "Uloženie prístupov zlyhalo.");
+  }
+
+  // Audit: rola + pridané / odobrané oprávnenia.
+  const after = await loadMemberAccessDetail(memberId).catch(() => null);
+  const beforeCodes = new Set((before?.permissions ?? []).map((p) => p.code));
+  const afterCodes = new Set((after?.permissions ?? []).map((p) => p.code));
+  const added = [...afterCodes].filter((c) => !beforeCodes.has(c));
+  const removed = [...beforeCodes].filter((c) => !afterCodes.has(c));
+
+  await logSecurityEvent({
+    userId: ctx.userId,
+    module: AUDIT_MODULES.USERS,
+    action: AUDIT_ACTIONS.USER_ACCESS_UPDATE,
+    objectId: memberId,
+    data: {
+      target_member_id: memberId,
+      old_role: before?.role ?? null,
+      new_role: result.new_role ?? roleCode,
+      added_permissions: added,
+      removed_permissions: removed,
+    },
+  });
+}
+
+
+/**
+ * K24.6 – Generovanie aktivačného kódu pre člena (role + sada oprávnení + platnosť).
+ */
+export interface GenerateActivationCodeParams {
+  memberId: string;
+  roleCode: AppRole;
+  permissions: Permission[];
+  validityDays: number;
+  maxUses: number;
+}
+
+export async function generateActivationCode(
+  params: GenerateActivationCodeParams,
+): Promise<{
+  code: string;
+  invitationId: string;
+  expiresAt: string;
+}> {
+  const ctx = await requireAuthenticated();
+  assertAdminGate(ctx);
+
+  if (!isAppRole(params.roleCode)) {
+    throw createAuthError(400, "Neplatný kód role.");
+  }
+  // ADMIN cez aktivačný kód môže vytvoriť iba sám ADMIN (vynucuje aj DB RPC).
+  if (
+    params.roleCode === APP_ROLES.ADMIN &&
+    !ctx.roles.includes(APP_ROLES.ADMIN)
+  ) {
+    throw createAuthError(
+      403,
+      "Pridelenie roly ADMIN cez aktivačný kód smie vykonat iba ADMIN.",
+    );
+  }
+
+  const validDays = params.validityDays ?? 14;
+  if (!Number.isFinite(validDays) || validDays <= 0 || validDays > 365) {
+    throw createAuthError(400, "Neplatná dĺžka platnosti kódu.");
+  }
+  const maxUses = params.maxUses ?? 1;
+  if (!Number.isInteger(maxUses) || maxUses < 1 || maxUses > 100) {
+    throw createAuthError(400, "Neplatný počet povolených použití kódu.");
+  }
+
+  const expiresAt = new Date(Date.now() + validDays * 24 * 60 * 60 * 1000)
+    .toISOString();
+
+  const supabase = await createClient();
+  const { data: member, error: memberError } = await supabase
+    .from("members")
+    .select("id")
+    .eq("id", params.memberId)
+    .maybeSingle();
+  if (memberError) throw createAuthError(500, "Chyba pri načítaní člena.");
+  if (!member) throw createAuthError(404, "Člen sa nenašiel.");
+
+  // Raw kód sa generuje kryptograficky bezpečne (Web Crypto) – iba raz, v pamäti.
+  const rawCode = generateInvitationCode();
+  const codeHash = await hashInvitationCode(rawCode);
+
+  const { data, error } = await supabase.rpc("create_invitation", {
+    p_role_code: params.roleCode,
+    p_code_hash: codeHash,
+    p_expires_at: expiresAt,
+    p_member_id: params.memberId,
+    p_max_uses: maxUses,
+    p_notes: "Aktivačný kód (K24)",
+  });
+
+  if (error) {
+    console.error("[generateActivationCode] create_invitation error:", error);
+    throw createAuthError(500, "Aktivačný kód sa nepodarilo vytvoriť.");
+  }
+  const invitationId = (data as string) ?? "";
+
+  // Oprávnenia schválené v kóde (viazaná na pozvánku).
+  if (params.permissions.length) {
+    const permIds = await Promise.all(
+      params.permissions.map((code) => getPermissionId(code)),
+    );
+    const { error: permError } = await supabase
+      .from("invitation_permissions")
+      .insert(
+        permIds.map((permissionId) => ({
+          invitation_id: invitationId,
+          permission_id: permissionId,
+        })),
+      );
+    if (permError) {
+      console.error("[generateActivationCode] permission insert error:", permError);
+      throw createAuthError(500, "Oprávnenia kódu sa nepodarilo uložiť.");
+    }
+  }
+
+  await logSecurityEvent({
+    userId: ctx.userId,
+    module: AUDIT_MODULES.USERS,
+    action: AUDIT_ACTIONS.ACTIVATION_CODE_CREATE,
+    objectId: invitationId,
+    data: {
+      member_id: params.memberId,
+      role_code: params.roleCode,
+      permissions: params.permissions,
+      max_uses: maxUses,
+    },
+  });
+
+  return { code: rawCode, invitationId, expiresAt };
+}
+
+/**
+ * K24.6 – Zrušenie nevyužitého aktivačného kódu člena.
+ */
+export async function revokeActivationCode(memberId: string): Promise<void> {
+  const ctx = await requireAuthenticated();
+  assertAdminGate(ctx);
+
+  const supabase = await createClient();
+  const { data: invitations, error } = await supabase
+    .from("invitations")
+    .select("id")
+    .eq("member_id", memberId)
+    .eq("status", "active")
+    .gt("expires_at", new Date().toISOString())
+    .maybeSingle();
+
+  if (error) throw createAuthError(500, "Chyba pri načítaní kódu.");
+  if (!invitations) {
+    throw createAuthError(404, "Žiadny aktívny aktivačný kód pre tohto člena.");
+  }
+
+  await supabase.rpc("revoke_invitation", {
+    p_invitation_id: invitations.id,
+  });
+
+  await logSecurityEvent({
+    userId: ctx.userId,
+    module: AUDIT_MODULES.USERS,
+    action: AUDIT_ACTIONS.ACTIVATION_CODE_REVOKE,
+    objectId: invitations.id,
+    data: { member_id: memberId },
+  });
+}
+
+/**
+ * Zoznam aktivačných kódov člena (pre prehľad v detailu).
+ */
+export async function listActivationCodesForMember(
+  memberId: string,
+): Promise<ActivationCodeRow[]> {
+  const ctx = await requireAuthenticated();
+  assertAdminGate(ctx);
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("invitations")
+    .select(
+      "id, role, status, use_count, max_uses, expires_at, created_at",
+    )
+    .eq("member_id", memberId)
+    .order("created_at", { ascending: false });
+
+  if (error) throw createAuthError(500, "Chyba pri načítaní aktivačných kódov.");
+  return (data ?? []).map((c) => ({
+    id: c.id,
+    role: isAppRole(c.role) ? c.role : APP_ROLES.CLEN,
+    status: c.status,
+    use_count: c.use_count,
+    max_uses: c.max_uses,
+    expires_at: c.expires_at,
+    created_at: c.created_at,
+  }));
+}
+
+
+// ============================================================================
+// Katalog oprávnení s popisom (pre admin UI)
+// ============================================================================
+
+export interface PermissionCatalogEntry {
+  code: Permission;
+  name: string;
+  description: string | null;
+}
+
+export async function listPermissionCatalogFull(): Promise<
+  PermissionCatalogEntry[]
+> {
+  const ctx = await requireAuthenticated();
+  assertAdminGate(ctx);
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("permissions")
+    .select("code, name, description")
+    .order("code");
+
+  if (error) throw createAuthError(500, "Chyba pri načítaní oprávnení.");
+  return ((data ?? []) as Array<{
+    code: string;
+    name: string;
+    description: string | null;
+  }>)
+    .filter((p) => (VISIBILITY_PERMISSIONS as readonly string[]).includes(p.code))
+    .map((p) => ({ code: p.code as Permission, name: p.name, description: p.description }));
+}
+
+// Popisná mena oprávnení pre UI (SLK). Kanonické kódy sa nemenia.
+const PERMISSION_LABELS: Record<Permission, string> = {
+  "dashboard.view": "Dashboard – zobrazenie",
+  "members.view": "Členovia – zobrazenie",
+  "members.create": "Členovia – vytvorenie",
+  "members.edit": "Členovia – úprava",
+  "members.delete": "Členovia – zmazanie",
+  "training.view": "Tréningy – zobrazenie",
+  "training.create": "Tréningy – vytvorenie",
+  "training.edit": "Tréningy – úprava",
+  "competition.view": "Súťaže – zobrazenie",
+  "competition.create": "Súťaže – vytvorenie",
+  "competition.edit": "Súťaže – úprava",
+  "calendar.view": "Kalendár – zobrazenie",
+  "calendar.manage": "Kalendár – správa",
+  "inventory.view": "Inventár – zobrazenie",
+  "inventory.create": "Inventár – vytvorenie",
+  "inventory.edit": "Inventár – úprava",
+  "inventory.manage": "Inventár – správa",
+  "vehicle.view": "Vozidlá – zobrazenie",
+  "vehicle.manage": "Vozidlá – správa",
+  "fault.create": "Poruchy – nahlásenie",
+  "fault.manage": "Poruchy – správa",
+  "finance.view": "Financie – zobrazenie",
+  "finance.create": "Financie – vytvorenie",
+  "finance.edit": "Financie – úprava",
+  "finance.export": "Financie – export",
+  "finance.manage_access": "Financie – prístupy",
+  "documents.view": "Dokumenty – zobrazenie",
+  "documents.upload": "Dokumenty – nahrávanie",
+  "reports.view": "Reporty – zobrazenie",
+  "reports.export": "Reporty – export",
+  "communication.view": "Komunikácia – zobrazenie",
+  "communication.send": "Komunikácia – odoslanie",
+  "admin.users": "Administrácia – používatelia",
+  "admin.permissions": "Administrácia – oprávnenia",
+  "admin.audit": "Administrácia – audit",
+  "announcements.view": "Oznámenia – zobrazenie",
+  "announcements.create": "Oznámenia – vytvorenie",
+  "announcements.edit": "Oznámenia – úprava",
+  "announcements.delete": "Oznámenia – zmazanie",
+  "meetings.view": "Schôdze – zobrazenie",
+  "meetings.create": "Schôdze – vytvorenie",
+  "meetings.edit": "Schôdze – úprava",
+  "meetings.delete": "Schôdze – zmazanie",
+  "work_parties.view": "Pracovné skupinky – zobrazenie",
+  "work_parties.create": "Pracovné skupinky – vytvorenie",
+  "work_parties.edit": "Pracovné skupinky – úprava",
+  "work_parties.delete": "Pracovné skupinky – zmazanie",
+  "incidents.view": "Hlásenia – zobrazenie",
+  "incidents.create": "Hlásenia – vytvorenie",
+  "incidents.edit": "Hlásenia – úprava",
+  "incidents.delete": "Hlásenia – zmazanie",
+  "inspection.view": "Inšpekcie – zobrazenie",
+  "inspection.manage": "Inšpekcie – správa",
+};
+

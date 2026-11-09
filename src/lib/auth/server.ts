@@ -104,7 +104,31 @@ export async function getAuthContext(): Promise<AuthContext> {
     }
   }
 
-  const permissions = Array.from(new Set([...rolePermissions, ...directPermissions]));
+  // Efektívne oprávnenia = (opravnenia z rolí ∨ priame individuálne granty)
+  //                        \ explicitné odobratia (denials).
+  // Musí byť konzistentné s public.has_permission() v databáze.
+  let deniedPermissions: Permission[] = [];
+  if (roles.length || directPermissions.length) {
+    const deniedResult = await supabase
+      .from("user_permission_denials")
+      .select("permissions!user_permission_denials_permission_id_fkey(code)")
+      .eq("user_id", user.id);
+    if (deniedResult.error) {
+      throw new Error(
+        `Unable to load denied permissions: ${deniedResult.error.message}`,
+      );
+    }
+    deniedPermissions = mapPermissionCodes(
+      (deniedResult.data ?? []) as unknown as UserPermissionEmbedRow[],
+    );
+  }
+
+  const allPermissions = Array.from(
+    new Set([...rolePermissions, ...directPermissions]),
+  );
+  const permissions = allPermissions.filter(
+    (p) => !deniedPermissions.includes(p),
+  );
 
   return { userId: user.id, email: user.email, roles, permissions };
 }

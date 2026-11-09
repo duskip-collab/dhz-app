@@ -97,6 +97,11 @@ export const AUDIT_ACTIONS = {
   USER_ROLE_ASSIGN: "role.assign",
   INVITATION_CREATE: "invitation.create",
   INVITATION_REVOKE: "invitation.revoke",
+  USER_ACCESS_UPDATE: "access.update",
+  ACTIVATION_CODE_CREATE: "activation.create",
+  ACTIVATION_CODE_REVOKE: "activation.revoke",
+  ACTIVATION_CODE_USE: "activation.use",
+  ACTIVATION_CODE_INVALID_ATTEMPT: "activation.invalid_attempt",
 } as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS];
@@ -125,6 +130,7 @@ export const AUDIT_MODULES = {
   USERS: "users",
   ROLES: "roles",
   PERMISSIONS: "permissions",
+  ACCESS: "access",
 } as const;
 
 export type AuditModule = (typeof AUDIT_MODULES)[keyof typeof AUDIT_MODULES];
