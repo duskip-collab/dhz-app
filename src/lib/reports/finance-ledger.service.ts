@@ -83,7 +83,7 @@ async function authorizeFinanceLedger(): Promise<void> {
   }
 
   for (const permission of FINANCE_LEDGER_PERMISSIONS) {
-    const allowed = await hasPermissionServer(ctx.userId, permission);
+    const allowed = await hasPermissionServer(permission);
     if (!allowed) {
       throw createAuthError(403, "Nemáte oprávnenie na tento report.");
     }

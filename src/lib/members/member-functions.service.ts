@@ -3,7 +3,7 @@
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { hasPermissionServer } from "@/lib/auth/server";
-import { PERMISSIONS } from "@/lib/auth/permissions";
+import { PERMISSIONS, type Permission } from "@/lib/auth/permissions";
 import { logSecurityEvent, AUDIT_ACTIONS } from "@/lib/audit/audit.service";
 import { createAuthError } from "./members.errors";
 
@@ -27,14 +27,14 @@ async function getCtx() {
   return { supabase, userId: user.id };
 }
 
-async function requirePerm(ctx: { userId: string }, perm: string) {
-  const ok = await hasPermissionServer(ctx.userId, perm as never);
+async function requirePerm(perm: Permission) {
+  const ok = await hasPermissionServer(perm);
   if (!ok) throw createAuthError(403, "Nedostatočné oprávnenie");
 }
 
 export async function getMemberFunctionCatalog() {
   const ctx = await getCtx();
-  await requirePerm(ctx, PERMISSIONS.MEMBERS_VIEW);
+  await requirePerm(PERMISSIONS.MEMBERS_VIEW);
   const { data, error } = await ctx.supabase
     .from("member_function_catalog" as never)
     .select("*")
@@ -46,7 +46,7 @@ export async function getMemberFunctionCatalog() {
 export async function getMemberFunctions(memberId: string) {
   UUID.parse(memberId);
   const ctx = await getCtx();
-  await requirePerm(ctx, PERMISSIONS.MEMBERS_VIEW);
+  await requirePerm(PERMISSIONS.MEMBERS_VIEW);
   const { data, error } = await ctx.supabase
     .from("member_function_assignments" as never)
     .select("*, member_function_catalog(*)")
@@ -60,7 +60,7 @@ export async function assignMemberFunction(memberId: string, input: unknown) {
   UUID.parse(memberId);
   const parsed = AssignInput.parse(input);
   const ctx = await getCtx();
-  await requirePerm(ctx, PERMISSIONS.MEMBERS_EDIT);
+  await requirePerm(PERMISSIONS.MEMBERS_EDIT);
 
   const { data: member, error: mErr } = await ctx.supabase
     .from("members" as never)
@@ -130,7 +130,7 @@ export async function endMemberFunction(assignmentId: string, validTo: string) {
   UUID.parse(assignmentId);
   const parsed = EndInput.parse({ valid_to: validTo });
   const ctx = await getCtx();
-  await requirePerm(ctx, PERMISSIONS.MEMBERS_EDIT);
+  await requirePerm(PERMISSIONS.MEMBERS_EDIT);
 
   const { data: row, error: rErr } = await ctx.supabase
     .from("member_function_assignments" as never)

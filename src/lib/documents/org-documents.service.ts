@@ -36,7 +36,7 @@ export async function listOrgDocuments(category?: OrgDocumentCategory): Promise<
   const ctx = await requireAuthenticated();
   const allowed =
     ctx.permissions.includes(PERMISSIONS.DOCUMENTS_VIEW) ||
-    (await hasPermissionServer(ctx.userId, PERMISSIONS.DOCUMENTS_VIEW));
+    (await hasPermissionServer(PERMISSIONS.DOCUMENTS_VIEW));
   if (!allowed) {
     throw createAuthError(403, "Nemáte oprávnenie na zobrazenie dokumentov.");
   }
@@ -70,7 +70,7 @@ export async function uploadOrgDocument(input: {
   const ctx = await requireAuthenticated();
   const allowed =
     ctx.permissions.includes(PERMISSIONS.DOCUMENTS_UPLOAD) ||
-    (await hasPermissionServer(ctx.userId, PERMISSIONS.DOCUMENTS_UPLOAD));
+    (await hasPermissionServer(PERMISSIONS.DOCUMENTS_UPLOAD));
   if (!allowed) {
     throw createAuthError(403, "Nemáte oprávnenie na nahrávanie dokumentov.");
   }
@@ -138,7 +138,7 @@ export async function deleteOrgDocument(documentId: string): Promise<{ id: strin
   const ctx = await requireAuthenticated();
   const allowed =
     ctx.permissions.includes(PERMISSIONS.DOCUMENTS_UPLOAD) ||
-    (await hasPermissionServer(ctx.userId, PERMISSIONS.DOCUMENTS_UPLOAD));
+    (await hasPermissionServer(PERMISSIONS.DOCUMENTS_UPLOAD));
   if (!allowed) {
     throw createAuthError(403, "Nemáte oprávnenie na mazanie dokumentov.");
   }
@@ -176,7 +176,7 @@ export async function getOrgDocumentUrl(documentId: string): Promise<string> {
   const ctx = await requireAuthenticated();
   const allowed =
     ctx.permissions.includes(PERMISSIONS.DOCUMENTS_VIEW) ||
-    (await hasPermissionServer(ctx.userId, PERMISSIONS.DOCUMENTS_VIEW));
+    (await hasPermissionServer(PERMISSIONS.DOCUMENTS_VIEW));
   if (!allowed) {
     throw createAuthError(403, "Nemáte oprávnenie na zobrazenie dokumentov.");
   }

@@ -74,7 +74,7 @@ async function authorizeVehicleStatus(): Promise<void> {
 
   // Druhá línia obrany — potvrdenie cez server RPC pre obe oprávnenia.
   for (const permission of VEHICLE_STATUS_PERMISSIONS) {
-    const allowed = await hasPermissionServer(ctx.userId, permission);
+    const allowed = await hasPermissionServer(permission);
     if (!allowed) {
       throw createAuthError(403, "Nemáte oprávnenie na tento report.");
     }

@@ -28,7 +28,7 @@ export async function getCommitteeMembers(): Promise<CommitteeMember[]> {
   const ctx = await requireAuthenticated();
   const allowed =
     ctx.permissions.includes(PERMISSIONS.COMMUNICATION_VIEW) ||
-    (await hasPermissionServer(ctx.userId, PERMISSIONS.COMMUNICATION_VIEW));
+    (await hasPermissionServer(PERMISSIONS.COMMUNICATION_VIEW));
   if (!allowed) {
     throw createAuthError(403, "Nemáte oprávnenie na zobrazenie výboru.");
   }
@@ -90,7 +90,7 @@ function mapMessage(row: Record<string, unknown>): CommitteeMessage {
 async function assertView(ctx: { userId: string; permissions: readonly string[] }): Promise<void> {
   const allowed =
     ctx.permissions.includes(PERMISSIONS.COMMUNICATION_VIEW) ||
-    (await hasPermissionServer(ctx.userId, PERMISSIONS.COMMUNICATION_VIEW));
+    (await hasPermissionServer(PERMISSIONS.COMMUNICATION_VIEW));
   if (!allowed) {
     throw createAuthError(403, "Nemáte oprávnenie na zobrazenie výboru.");
   }
@@ -99,7 +99,7 @@ async function assertView(ctx: { userId: string; permissions: readonly string[] 
 async function assertSend(ctx: { userId: string; permissions: readonly string[] }): Promise<void> {
   const allowed =
     ctx.permissions.includes(PERMISSIONS.COMMUNICATION_SEND) ||
-    (await hasPermissionServer(ctx.userId, PERMISSIONS.COMMUNICATION_SEND));
+    (await hasPermissionServer(PERMISSIONS.COMMUNICATION_SEND));
   if (!allowed) {
     throw createAuthError(403, "Nemáte oprávnenie na odosielanie správ.");
   }

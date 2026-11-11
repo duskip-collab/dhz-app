@@ -328,7 +328,7 @@ export async function uploadMemberPhotoAction(
     const ctx = await getAuthContext();
     const ok =
       ctx.permissions.includes(PERMISSIONS.MEMBERS_EDIT) ||
-      (await hasPermissionServer(ctx.userId, PERMISSIONS.MEMBERS_EDIT));
+      (await hasPermissionServer(PERMISSIONS.MEMBERS_EDIT));
     if (!ok) return { ok: false, errors: {}, message: "Nemáte oprávnenie." };
 
     const member = await getMemberById(memberId);
@@ -453,7 +453,7 @@ export async function deleteMemberPhotoAction(
     const ctx = await getAuthContext();
     const canEdit =
       ctx.permissions.includes(PERMISSIONS.MEMBERS_EDIT) ||
-      (await hasPermissionServer(ctx.userId, PERMISSIONS.MEMBERS_EDIT));
+      (await hasPermissionServer(PERMISSIONS.MEMBERS_EDIT));
     if (!canEdit) return { ok: false, errors: {}, message: "Nemáte oprávnenie." };
 
     const member = await getMemberById(memberId);

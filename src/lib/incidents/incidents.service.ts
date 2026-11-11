@@ -62,7 +62,7 @@ async function requireAuthenticated(): Promise<AuthContext> {
 
 async function assertPermission(ctx: AuthContext, permission: Permission): Promise<void> {
   const ok =
-    ctx.permissions.includes(permission) || (await hasPermissionServer(ctx.userId, permission));
+    ctx.permissions.includes(permission) || (await hasPermissionServer(permission));
   if (!ok) {
     throw createAuthError(403, "Nemáte oprávnenie na túto operáciu.");
   }

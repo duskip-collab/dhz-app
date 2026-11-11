@@ -317,10 +317,10 @@ export async function uploadEquipmentPhotoAction(
     const ctx = await getAuthContext();
     const canEdit =
       ctx.permissions.includes(PERMISSIONS.INVENTORY_EDIT) ||
-      (await hasPermissionServer(ctx.userId, PERMISSIONS.INVENTORY_EDIT));
+      (await hasPermissionServer(PERMISSIONS.INVENTORY_EDIT));
     const canManage =
       ctx.permissions.includes(PERMISSIONS.INVENTORY_MANAGE) ||
-      (await hasPermissionServer(ctx.userId, PERMISSIONS.INVENTORY_MANAGE));
+      (await hasPermissionServer(PERMISSIONS.INVENTORY_MANAGE));
     const ok = canEdit || canManage;
     if (!ok) return fail("Nemáte oprávnenie.", {});
 

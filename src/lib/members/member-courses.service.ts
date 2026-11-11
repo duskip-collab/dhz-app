@@ -122,10 +122,7 @@ export async function createMemberCourse(
   const ctx = await requireAuthenticated();
 
   // Authorization check — MEMBERS_EDIT
-  const canEdit = await hasPermissionServer(
-    ctx.userId,
-    PERMISSIONS.MEMBERS_EDIT
-  );
+  const canEdit = await hasPermissionServer(PERMISSIONS.MEMBERS_EDIT);
   if (!canEdit) {
     throw createCourseError(
       403,
@@ -192,10 +189,7 @@ export async function updateMemberCourse(
   const ctx = await requireAuthenticated();
 
   // Authorization check
-  const canEdit = await hasPermissionServer(
-    ctx.userId,
-    PERMISSIONS.MEMBERS_EDIT
-  );
+  const canEdit = await hasPermissionServer(PERMISSIONS.MEMBERS_EDIT);
   if (!canEdit) {
     throw createCourseError(403, "Nemáte oprávnenie na úpravu kurzov");
   }
@@ -262,10 +256,7 @@ export async function deleteMemberCourse(courseId: string): Promise<void> {
   const ctx = await requireAuthenticated();
 
   // Authorization check — MEMBERS_EDIT or ADMIN permission
-  const canEdit = await hasPermissionServer(
-    ctx.userId,
-    PERMISSIONS.MEMBERS_EDIT
-  );
+  const canEdit = await hasPermissionServer(PERMISSIONS.MEMBERS_EDIT);
   
   // Check if has admin-level delete - check if role is admin
   const isAdmin = ctx.roles && ctx.roles.some((r: string) => r === "ADMIN");

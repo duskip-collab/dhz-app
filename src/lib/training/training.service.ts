@@ -124,7 +124,7 @@ async function requireAuthenticated(): Promise<AuthContext> {
  * Overí permission z kontextu, s RPC fallbackom (defense-in-depth).
  */
 async function assertPermission(ctx: AuthContext, permission: Permission): Promise<void> {
-  const ok = ctx.permissions.includes(permission) || (await hasPermissionServer(ctx.userId, permission));
+  const ok = ctx.permissions.includes(permission) || (await hasPermissionServer(permission));
   if (!ok) {
     throw createAuthError(403, "Nemáte oprávnenie na túto operáciu.");
   }

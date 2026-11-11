@@ -158,7 +158,7 @@ async function requireAuthenticated(): Promise<AuthContext> {
 
 async function assertPermission(ctx: AuthContext, permission: Permission): Promise<void> {
   const ok =
-    ctx.permissions.includes(permission) || (await hasPermissionServer(ctx.userId, permission));
+    ctx.permissions.includes(permission) || (await hasPermissionServer(permission));
   if (!ok) {
     throw createAuthError(403, "Nemáte oprávnenie na túto operáciu.");
   }
@@ -589,10 +589,10 @@ export async function replaceEquipmentPhotoPath(
   const ctx = await requireAuthenticated();
   const canEdit =
     ctx.permissions.includes(PERMISSIONS.INVENTORY_EDIT) ||
-    (await hasPermissionServer(ctx.userId, PERMISSIONS.INVENTORY_EDIT));
+    (await hasPermissionServer(PERMISSIONS.INVENTORY_EDIT));
   const canManage =
     ctx.permissions.includes(PERMISSIONS.INVENTORY_MANAGE) ||
-    (await hasPermissionServer(ctx.userId, PERMISSIONS.INVENTORY_MANAGE));
+    (await hasPermissionServer(PERMISSIONS.INVENTORY_MANAGE));
   if (!canEdit && !canManage) {
     throw createAuthError(403, "Nemáte oprávnenie na upravovanie inventára.");
   }

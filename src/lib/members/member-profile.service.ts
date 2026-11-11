@@ -147,7 +147,7 @@ export async function getMemberProfile(memberId: string): Promise<MemberProfile>
   // Permission check: members.view
   const hasView =
     checkPermission(ctx, PERMISSIONS.MEMBERS_VIEW) ||
-    (await checkPermissionServer(ctx.userId, PERMISSIONS.MEMBERS_VIEW));
+    (await checkPermissionServer(PERMISSIONS.MEMBERS_VIEW));
 
   if (!hasView) {
     throw createAuthError(403, "Nemáte oprávnenie na zobrazenie profilu člena.");

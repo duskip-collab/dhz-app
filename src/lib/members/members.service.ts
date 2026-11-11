@@ -112,12 +112,9 @@ export function checkPermission(ctx: AuthContext, permission: Permission): boole
 /**
  * Server-side permission check – volá Supabase RPC has_permission
  */
-export async function checkPermissionServer(
-  userId: string,
-  permission: Permission
-): Promise<boolean> {
+export async function checkPermissionServer(permission: Permission): Promise<boolean> {
   try {
-    const result = await hasPermissionServer(userId, permission);
+    const result = await hasPermissionServer(permission);
     return result === true;
   } catch (error) {
     console.error("[checkPermissionServer]", error);
@@ -137,7 +134,7 @@ export async function listMembers(
 
   // Authorization check – members.view
   const hasView = checkPermission(ctx, PERMISSIONS.MEMBERS_VIEW) ||
-    (await checkPermissionServer(ctx.userId, PERMISSIONS.MEMBERS_VIEW));
+    (await checkPermissionServer(PERMISSIONS.MEMBERS_VIEW));
 
   if (!hasView) {
     throw createAuthError(403, "Nemáte oprávnenie na zobrazenie členov.");
@@ -188,7 +185,7 @@ export async function getMember(
 
   // Authorization check – members.view
   const hasView = checkPermission(ctx, PERMISSIONS.MEMBERS_VIEW) ||
-    (await checkPermissionServer(ctx.userId, PERMISSIONS.MEMBERS_VIEW));
+    (await checkPermissionServer(PERMISSIONS.MEMBERS_VIEW));
 
   if (!hasView) {
     throw createAuthError(403, "Nemáte oprávnenie na zobrazenie člena.");
@@ -244,7 +241,7 @@ export async function createMember(
 
   // Authorization check – members.create
   const hasCreate = checkPermission(ctx, PERMISSIONS.MEMBERS_CREATE) ||
-    (await checkPermissionServer(ctx.userId, PERMISSIONS.MEMBERS_CREATE));
+    (await checkPermissionServer(PERMISSIONS.MEMBERS_CREATE));
 
   if (!hasCreate) {
     throw createAuthError(403, "Nemáte oprávnenie na vytvorenie člena.");
@@ -345,7 +342,7 @@ export async function updateMember(
 
   // Authorization check – members.edit
   const hasEdit = checkPermission(ctx, PERMISSIONS.MEMBERS_EDIT) ||
-    (await checkPermissionServer(ctx.userId, PERMISSIONS.MEMBERS_EDIT));
+    (await checkPermissionServer(PERMISSIONS.MEMBERS_EDIT));
 
   if (!hasEdit) {
     throw createAuthError(403, "Nemáte oprávnenie na upravovanie člena.");
@@ -446,7 +443,7 @@ export async function archiveMember(memberId: string): Promise<Member> {
 
   // Authorization check – members.edit
   const hasEdit = checkPermission(ctx, PERMISSIONS.MEMBERS_EDIT) ||
-    (await checkPermissionServer(ctx.userId, PERMISSIONS.MEMBERS_EDIT));
+    (await checkPermissionServer(PERMISSIONS.MEMBERS_EDIT));
 
   if (!hasEdit) {
     throw createAuthError(403, "Nemáte oprávnenie na archivovanie člena.");
@@ -511,7 +508,7 @@ export async function reactivateMember(memberId: string): Promise<Member> {
 
   // Authorization check – members.edit
   const hasEdit = checkPermission(ctx, PERMISSIONS.MEMBERS_EDIT) ||
-    (await checkPermissionServer(ctx.userId, PERMISSIONS.MEMBERS_EDIT));
+    (await checkPermissionServer(PERMISSIONS.MEMBERS_EDIT));
 
   if (!hasEdit) {
     throw createAuthError(403, "Nemáte oprávnenie na reaktiváciu člena.");
@@ -575,7 +572,7 @@ export async function deleteMember(memberId: string): Promise<{ id: string }> {
 
   const hasDelete =
     checkPermission(ctx, PERMISSIONS.MEMBERS_DELETE) ||
-    (await checkPermissionServer(ctx.userId, PERMISSIONS.MEMBERS_DELETE));
+    (await checkPermissionServer(PERMISSIONS.MEMBERS_DELETE));
 
   if (!hasDelete) {
     throw createAuthError(403, "Nemáte oprávnenie na vymazanie člena.");
@@ -680,7 +677,7 @@ export async function listMemberGuardians(memberId: string): Promise<MemberGuard
 
   const hasView =
     checkPermission(ctx, PERMISSIONS.MEMBERS_VIEW) ||
-    (await checkPermissionServer(ctx.userId, PERMISSIONS.MEMBERS_VIEW));
+    (await checkPermissionServer(PERMISSIONS.MEMBERS_VIEW));
 
   if (!hasView) {
     throw createAuthError(403, "Nemáte oprávnenie na zobrazenie zástupcov.");
@@ -722,7 +719,7 @@ export async function createMemberGuardian(
 
   const hasEdit =
     checkPermission(ctx, PERMISSIONS.MEMBERS_EDIT) ||
-    (await checkPermissionServer(ctx.userId, PERMISSIONS.MEMBERS_EDIT));
+    (await checkPermissionServer(PERMISSIONS.MEMBERS_EDIT));
 
   if (!hasEdit) {
     throw createAuthError(403, "Nemáte oprávnenie na správu zástupcov.");
@@ -824,7 +821,7 @@ export async function updateMemberGuardian(
 
   const hasEdit =
     checkPermission(ctx, PERMISSIONS.MEMBERS_EDIT) ||
-    (await checkPermissionServer(ctx.userId, PERMISSIONS.MEMBERS_EDIT));
+    (await checkPermissionServer(PERMISSIONS.MEMBERS_EDIT));
 
   if (!hasEdit) {
     throw createAuthError(403, "Nemáte oprávnenie na správu zástupcov.");
@@ -897,7 +894,7 @@ export async function deleteMemberGuardian(memberId: string, guardianId: string)
 
   const hasEdit =
     checkPermission(ctx, PERMISSIONS.MEMBERS_EDIT) ||
-    (await checkPermissionServer(ctx.userId, PERMISSIONS.MEMBERS_EDIT));
+    (await checkPermissionServer(PERMISSIONS.MEMBERS_EDIT));
 
   if (!hasEdit) {
     throw createAuthError(403, "Nemáte oprávnenie na správu zástupcov.");
@@ -931,7 +928,7 @@ export async function replaceMemberPhotoPath(
   const ctx = await requireAuthenticated();
   const hasEdit =
     checkPermission(ctx, PERMISSIONS.MEMBERS_EDIT) ||
-    (await checkPermissionServer(ctx.userId, PERMISSIONS.MEMBERS_EDIT));
+    (await checkPermissionServer(PERMISSIONS.MEMBERS_EDIT));
 
   if (!hasEdit) {
     throw createAuthError(403, "Nemáte oprávnenie na upravovanie člena.");
@@ -968,7 +965,7 @@ export async function clearMemberPhotoPath(
   const ctx = await requireAuthenticated();
   const hasEdit =
     checkPermission(ctx, PERMISSIONS.MEMBERS_EDIT) ||
-    (await checkPermissionServer(ctx.userId, PERMISSIONS.MEMBERS_EDIT));
+    (await checkPermissionServer(PERMISSIONS.MEMBERS_EDIT));
   if (!hasEdit) {
     throw createAuthError(403, "Nemáte oprávnenie na upravovanie člena.");
   }
@@ -1002,7 +999,7 @@ export async function restoreMemberPhotoPath(
   const ctx = await requireAuthenticated();
   const hasEdit =
     checkPermission(ctx, PERMISSIONS.MEMBERS_EDIT) ||
-    (await checkPermissionServer(ctx.userId, PERMISSIONS.MEMBERS_EDIT));
+    (await checkPermissionServer(PERMISSIONS.MEMBERS_EDIT));
   if (!hasEdit) {
     throw createAuthError(403, "Nemáte oprávnenie na upravovanie člena.");
   }
@@ -1040,7 +1037,7 @@ export async function getMemberPhotoUrl(photoPath: string | null): Promise<strin
 
   const hasView =
     checkPermission(ctx, PERMISSIONS.MEMBERS_VIEW) ||
-    (await checkPermissionServer(ctx.userId, PERMISSIONS.MEMBERS_VIEW));
+    (await checkPermissionServer(PERMISSIONS.MEMBERS_VIEW));
 
   if (!hasView) {
     throw createAuthError(403, "Nemáte oprávnenie na zobrazenie fotografie.");
@@ -1071,7 +1068,7 @@ export async function getMemberPhotoUrls(
   const ctx = await requireAuthenticated();
   const hasView =
     checkPermission(ctx, PERMISSIONS.MEMBERS_VIEW) ||
-    (await checkPermissionServer(ctx.userId, PERMISSIONS.MEMBERS_VIEW));
+    (await checkPermissionServer(PERMISSIONS.MEMBERS_VIEW));
   if (!hasView) {
     throw createAuthError(403, "Nemáte oprávnenie na zobrazenie fotografií členov.");
   }

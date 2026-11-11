@@ -143,7 +143,7 @@ export async function createDrivingLicense(
   }
 
   // Check permissions - use hasPermissionServer
-  const canEdit = await hasPermissionServer(ctx.userId, PERMISSIONS.MEMBERS_EDIT);
+  const canEdit = await hasPermissionServer(PERMISSIONS.MEMBERS_EDIT);
   if (!canEdit) {
     throw new DrivingLicenseServiceError(
       'Nemáš oprávnenie na vytvorenie vodičského preukazu',
@@ -199,7 +199,7 @@ export async function updateDrivingLicense(
   const ctx = await requireAuthenticated();
 
   // Check permissions - use hasPermissionServer
-  const canEdit = await hasPermissionServer(ctx.userId, PERMISSIONS.MEMBERS_EDIT);
+  const canEdit = await hasPermissionServer(PERMISSIONS.MEMBERS_EDIT);
   if (!canEdit) {
     throw new DrivingLicenseServiceError(
       'Nemáš oprávnenie na úpravu vodičského preukazu',
@@ -275,7 +275,7 @@ export async function deleteDrivingLicense(licenseId: string): Promise<void> {
   const ctx = await requireAuthenticated();
 
   // Check permissions - use hasPermissionServer  
-  const canDelete = await hasPermissionServer(ctx.userId, PERMISSIONS.MEMBERS_EDIT);
+  const canDelete = await hasPermissionServer(PERMISSIONS.MEMBERS_EDIT);
   if (!canDelete) {
     throw new DrivingLicenseServiceError(
       'Nemáš oprávnenie na vymazanie vodičského preukazu',
