@@ -100,6 +100,8 @@ export interface CreateInvitationParams {
   maxUses?: number;
   /** Voliteľná poznámka administrátora. */
   notes?: string | null;
+  /** Oprávnenia ktoré majú byť priradené po uplatnení kódu. */
+  permissions?: string[] | null;
 }
 
 // =============================================================================

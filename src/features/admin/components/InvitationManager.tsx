@@ -430,6 +430,27 @@ export function InvitationManager({
               />
             </div>
 
+<div>
+              <label htmlFor="inv-permissions" className="block text-sm font-medium text-gray-700 mb-1.5">Oprávnenia (voliteľné)</label>
+              <div className="space-y-1.5 max-h-[200px] overflow-y-auto">
+                {(Object.keys(PERMISSIONS) as Permission[]).map((perm) => (
+                  <div
+                    key={perm}
+                    className="flex items-start cursor-pointer"
+                  >
+                    <input
+                      type="checkbox"
+                      name="permissions"
+                      value={perm}
+                      className="w-4 h-4 rounded bg-gray-200 border-gray-300 focus:ring-[#C62828] focus:ring-offset-2 cursor-pointer accent-[#C62828]"
+                    />
+                    <span className="ml-2 text-sm text-gray-700 line-through opacity-0 opacity-0 hover:opacity-100 transition opacity">
+                      {PERMISSIONS[perm]}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
             {createState && !createState.ok ? (
               <p
                 role="alert"

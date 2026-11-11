@@ -76,6 +76,12 @@ export async function createInvitationAction(
   const targetEmailRaw = String(formData.get("target_email") ?? "").trim();
   const notesRaw = String(formData.get("notes") ?? "").trim();
 
+  // Get selected permissions
+  const permissionsRaw = formData.getAll("permissions") ?? [];
+  const permissions = permissionsRaw
+    .map((p: string) => String(p).trim())
+    .filter((p: string) => p.length > 0);
+
   try {
     const created = await createInvitation({
       role: role as AppRole,
@@ -83,6 +89,7 @@ export async function createInvitationAction(
       maxUses,
       targetEmail: targetEmailRaw ? targetEmailRaw : null,
       notes: notesRaw ? notesRaw : null,
+      permissions: permissions.length > 0 ? permissions : undefined,
     });
 
     revalidatePath("/admin/invitations");
