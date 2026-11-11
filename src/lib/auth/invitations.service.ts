@@ -1,4 +1,46 @@
-// K17.5 – Serverová služba pre správu pozývacích kódov.
+/** Assign permissions from invitation to user */
+async function assignPermissionsFromInvitation(invitationId: string, userId: string): Promise<void> {
+  const supabase = await createClient();
+
+  // Get permissions associated with this invitation
+  const { data: permRows, error: permError } = await supabase
+    .from("invitation_permissions")
+    .select("permission_id")
+    .eq("invitation_id", invitationId);
+
+  if (permError) {
+    console.error("[assignPermissionsFromInvitation] Error fetching invitation permissions:", permError.message);
+    return;
+  }
+
+  if (!permRows || permRows.length === 0) {
+    return;
+  }
+
+  // Extract permission IDs and assign to user
+  const permissionIds = permRows.map((row) => row.permission_id).filter(
+    (id): id is string => id !== null && id !== undefined,
+  );
+
+  if (permissionIds.length === 0) {
+    return;
+  }
+
+  // Insert into user_permissions
+  const { error: insertError } = await supabase.from("user_permissions").insert(
+    permissionIds.map((permissionId) => ({
+      user_id: userId,
+      permission_id: permissionId,
+      granted_by: userId,
+    })),
+  );
+
+  if (insertError) {
+    console.error("[assignPermissionsFromInvitation] Error assigning permissions to user:", insertError.message);
+  }
+}
+
+/** K17.5 – Serverová služba pre správu pozývacích kódov.
 //
 // BEZPEČNOSTNÉ ZÁSADY:
 //  - Raw pozývací kód sa v DB ukladá IBA ako SHA-256 hash (`code_hash`).
