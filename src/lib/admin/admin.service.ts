@@ -740,8 +740,21 @@ export async function saveMemberAccess(
   const before = await loadMemberAccessDetail(memberId).catch(() => null);
 
   const supabase = await createClient();
+  const { data: memberData, error: memErr } = await supabase
+    .from("members")
+    .select("id, auth_user_id")
+    .eq("id", memberId)
+    .maybeSingle();
+  if (memErr || !memberData) {
+    throw createAuthError(404, "Člen sa nenašiel.");
+  }
+  if (!memberData.auth_user_id) {
+    throw createAuthError(400, "Člen nemá vytvorený používateľský účet. Najprv vygenerujte aktivačný kód alebo pozvánku.");
+  }
+  const userId = memberData.auth_user_id;
+
   const { data, error } = await supabase.rpc("set_member_access", {
-    p_user_id: memberId,
+    p_user_id: userId,
     p_role_code: roleCode,
     p_grant_permissions: grantPermissions,
     p_deny_permissions: denyPermissions,
@@ -752,10 +765,26 @@ export async function saveMemberAccess(
     throw createAuthError(500, "Uloženie prístupov zlyhalo.");
   }
   const result = data as
-    | { success: boolean; old_role?: string; new_role?: string }
+    | { success: boolean; error?: string; old_role?: string; new_role?: string }
     | null;
   if (!result || result.success !== true) {
-    throw createAuthError(500, "Uloženie prístupov zlyhalo.");
+    const errCode = result?.error ?? "unknown";
+    if (errCode === "invalid_permission") {
+      throw createAuthError(400, "Chybná alebo nepovolená sada oprávnení.");
+    }
+    if (errCode === "forbidden" || errCode === "not_authenticated") {
+      throw createAuthError(403, "Nemáte oprávnenie na túto akciu.");
+    }
+    if (errCode === "self_escalation") {
+      throw createAuthError(403, "Self-escalation nie je povolená.");
+    }
+    if (errCode === "admin_role_restricted") {
+      throw createAuthError(403, "Pridelenie roly ADMIN smie vykonať iba používateľ s rolou ADMIN.");
+    }
+    if (errCode === "unknown_role") {
+      throw createAuthError(400, "Neznáma alebo nepodporovaná rola.");
+    }
+    throw createAuthError(500, `Uloženie prístupov zlyhalo (${errCode}).`);
   }
 
   // Audit: rola + pridané / odobrané oprávnenia.
