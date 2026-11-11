@@ -13,6 +13,10 @@ import {
   createInvitation,
   revokeInvitation,
 } from "@/lib/auth/invitations.service";
+import {
+  generateInvitationCode,
+  hashInvitationCode,
+} from "@/lib/auth/invitations.share";
 
 // =============================================================================
 // Prehľad: členovia + roly + oprávnenia

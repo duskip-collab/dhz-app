@@ -159,7 +159,7 @@ export function MemberAccessEditor({
   const [codesState, codesAction] = useActionState(listActivationCodesForMemberAction, null);
 
   useEffect(() => {
-    void detailAction(null, Object.assign(new FormData(), { member_id: member.member_id }));
+    void detailAction(Object.assign(new FormData(), { member_id: member.member_id }));
   }, [member.member_id, detailAction]);
 
   useEffect(() => {
@@ -260,7 +260,7 @@ export function MemberAccessEditor({
     const grantPermissions = detail.permissions.filter((p) => p.source === "granted").map((p) => p.code);
     const denyPermissions = detail.permissions.filter((p) => p.source === "denied").map((p) => p.code);
     const roleCode = (detail.role ?? APP_ROLES.CLEN) as AppRole;
-    await saveAction(null, Object.assign(new FormData(), {
+    await saveAction(Object.assign(new FormData(), {
       member_id: detail.member.member_id,
       role_code: roleCode,
       grant_permissions: JSON.stringify(grantPermissions),
@@ -271,7 +271,7 @@ export function MemberAccessEditor({
   const handleGenerateCode = useCallback(async () => {
     if (!detail) return;
     setCodePending(true);
-    await codeAction(null, Object.assign(new FormData(), {
+    await codeAction(Object.assign(new FormData(), {
       member_id: detail.member.member_id,
       role_code: (detail.role ?? APP_ROLES.CLEN) as AppRole,
       permissions: JSON.stringify(detail.permissions.filter((p) => p.source !== "none" && p.source !== "denied").map((p) => p.code)),
@@ -284,9 +284,9 @@ export function MemberAccessEditor({
     if (!detail) return;
     if (!window.confirm("Zrušiť aktívny aktivačný kód tohto člena?")) return;
     setRevokePending(true);
-    await revokeAction(null, Object.assign(new FormData(), { member_id: detail.member.member_id }));
+    await revokeAction(Object.assign(new FormData(), { member_id: detail.member.member_id }));
     setRevokePending(false);
-    void codesAction(null, Object.assign(new FormData(), { member_id: detail.member.member_id }));
+    void codesAction(Object.assign(new FormData(), { member_id: detail.member.member_id }));
   }, [detail, revokeAction, codesAction]);
 
 
@@ -432,7 +432,46 @@ export function MemberAccessEditor({
           <div className="space-y-3">
             {MODULES.map((mod) => (
               <div key={mod.module} className="border border-gray-100 rounded-lg overflow-hidden">
-{/* Aktivačné kódy */}
+                <div className="bg-gray-50 px-3 py-2 text-xs font-semibold text-gray-600 border-b border-gray-100 uppercase tracking-wide">
+                  {mod.label}
+                </div>
+                <div className="divide-y divide-gray-50">
+                  {mod.permissions.map((perm) => {
+                    const entry = detail?.permissions.find((p) => p.code === perm.code);
+                    const source = entry?.source ?? "none";
+                    const info = SOURCE_LABELS[source];
+                    const effective = source === "granted" || source === "inherited";
+                    return (
+                      <button
+                        key={perm.code}
+                        type="button"
+                        onClick={() => handleToggle(perm.code)}
+                        className="w-full flex items-center justify-between px-3 py-2.5 text-sm transition hover:bg-gray-25"
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <input
+                            type="checkbox"
+                            checked={effective}
+                            readOnly
+                            className="rounded border-gray-300 text-[#C62828] focus:ring-[#C62828]"
+                          />
+                          <div className="min-w-0">
+                            <div className="font-medium text-gray-900 truncate">{perm.name}</div>
+                            <div className="text-[11px] text-gray-500 truncate">{perm.description}</div>
+                          </div>
+                        </div>
+                        <Badge tone={info.tone}>
+                          {info.label}
+                        </Badge>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+
         <Card title="Aktivačné kódy" subtitle="Prehľad aktívnych a použitých kódov tohto člena." className="mt-6">
           <div className="space-y-2">
             {detail?.activationCodes.length ? (
@@ -465,7 +504,6 @@ export function MemberAccessEditor({
                                   ? "red"
                                   : "yellow"
                               }
-                              className="text-[10px] px-2"
                             >
                               {c.status}
                             </Badge>
@@ -505,43 +543,4 @@ export function MemberAccessEditor({
     </div>
   );
 }
-                <div className="bg-gray-50 px-3 py-2 text-xs font-semibold text-gray-600 border-b border-gray-100 uppercase tracking-wide">
-                  {mod.label}
-                </div>
-                <div className="divide-y divide-gray-50">
-                  {mod.permissions.map((perm) => {
-                    const entry = detail?.permissions.find((p) => p.code === perm.code);
-                    const source = entry?.source ?? "none";
-                    const info = SOURCE_LABELS[source];
-                    const effective = source === "granted" || source === "inherited";
-                    return (
-                      <button
-                        key={perm.code}
-                        type="button"
-                        onClick={() => handleToggle(perm.code)}
-                        className="w-full flex items-center justify-between px-3 py-2.5 text-sm transition hover:bg-gray-25"
-                      >
-                        <div className="flex items-center gap-3 min-w-0">
-                          <input
-                            type="checkbox"
-                            checked={effective}
-                            readOnly
-                            className="rounded border-gray-300 text-[#C62828] focus:ring-[#C62828]"
-                          />
-                          <div className="min-w-0">
-                            <div className="font-medium text-gray-900 truncate">{perm.name}</div>
-                            <div className="text-[11px] text-gray-500 truncate">{perm.description}</div>
-                          </div>
-                        </div>
-                        <Badge tone={info.tone} className="shrink-0">
-                          {info.label}
-                        </Badge>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            ))}
-          </div>
-        </Card>
 

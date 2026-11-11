@@ -16,26 +16,15 @@ import {
 } from "@/lib/admin/admin.service";
 import { PERMISSIONS, type Permission } from "@/lib/auth/permissions";
 import { getAuthContext } from "@/lib/auth/server";
-import { isAppRole } from "@/lib/auth/roles";
+import { isAppRole, type AppRole } from "@/lib/auth/roles";
 
 type AdminActionState =
   | {
       ok: true;
       message?: string;
-      data?: {
-        kind?: "login" | "invitation";
-        code?: string;
-        invitationId?: string;
-        expiresAt?: string;
-        hasAccount?: boolean;
-        hasActiveInvitation?: boolean;
-        invitationStatus?: string | null;
-        invitationRole?: string | null;
-        invitationExpiresAt?: string | null;
-        accessStatus?: string;
-      };
+      data?: any;
     }
-  | { ok: false; errors: Record<string, string>; message: string };
+  | { ok: false; errors?: Record<string, string>; message: string };
 
 function fail(message: string, errors: Record<string, string> = {}): AdminActionState {
   return { ok: false, errors, message };
