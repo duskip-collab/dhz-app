@@ -6,7 +6,7 @@ import {
   hasAnyPermission as checkAnyPermission,
   type Permission,
 } from "./permissions";
-import { mapPermissionCodes } from "./permissions-map";
+import { mapPermissionCodes, mapRoleCodes, type UserRoleEmbedRow, type RolePermissionEmbedRow, type UserPermissionEmbedRow } from "./permissions-map";
 
 export interface AuthContext {
   userId: string;
@@ -40,6 +40,20 @@ export async function getAuthContext(): Promise<AuthContext> {
   if (isMissingAuthSessionError(userError)) redirect("/login");
   if (userError) throw new Error(`Unable to load authenticated user: ${userError.message}`);
   if (!user) redirect("/login");
+
+  // Look up the member record using auth_user_id - member UUID is DIFFERENT from auth UUID
+  const { data: memberResult, error: memberError } = await supabase
+    .from("members")
+    .select("id")
+    .eq("auth_user_id", user.id)
+    .single();
+
+  if (memberError || !memberResult) {
+    // Member does not exist - this user is not a registered member
+    return { userId: user.id, email: user.email, memberId: null, role: null, roles: [], permissions: [] };
+  }
+
+  const memberId = memberResult.id;
 
   const [userRolesResult, directPermissionsResult] = await Promise.all([
     supabase
@@ -126,42 +140,75 @@ export async function getAuthContext(): Promise<AuthContext> {
     (p) => !deniedPermissions.includes(p),
   );
 
-  return { userId: user.id, email: user.email, roles, permissions };
+  return { userId: user.id, email: user.email, memberId, role: roles.length ? roles[0] : null, roles, permissions };
 }
 
 export async function requirePermission(permission: Permission): Promise<AuthContext> {
   const ctx = await getAuthContext();
-  if (!checkPermission(ctx.permissions, permission)) redirect("/access-denied");
+  // Use member-centric check: if member has the permission
+  if (ctx.memberId === null) {
+    redirect("/access-denied");
+  }
+  const hasPerm = await hasPermissionServer(permission);
+  if (hasPerm !== true) {
+    redirect("/access-denied");
+  }
   return ctx;
 }
 
 export async function requireAnyPermission(permissions: readonly Permission[]): Promise<AuthContext> {
   const ctx = await getAuthContext();
-  if (!checkAnyPermission(ctx.permissions, permissions)) redirect("/access-denied");
+  // Use member-centric check: if member has any of the required permissions
+  if (ctx.memberId === null) {
+    redirect("/access-denied");
+  }
+  // Check if member has any of the required permissions
+  const hasAny = await Promise.all(permissions.map((p) => hasPermissionServer(p)));
+  const hasPerm = hasAny.some((result) => result === true);
+  if (hasPerm !== true) {
+    redirect("/access-denied");
+  }
   return ctx;
 }
 
 export async function requireRole(role: AppRole): Promise<AuthContext> {
   const ctx = await getAuthContext();
-  if (!checkRole(ctx.roles, role)) redirect("/access-denied");
+  // Use member-centric check: if member has the role
+  if (ctx.memberId === null) {
+    redirect("/access-denied");
+  }
+  const hasRole = await hasRoleServer(role);
+  if (hasRole !== true) {
+    redirect("/access-denied");
+  }
   return ctx;
 }
 
-export async function hasPermissionServer(userId: string, permission: Permission): Promise<boolean> {
-  const supabase = await createClient();
+export async function hasPermissionServer(permission: Permission): Promise<boolean> {
+  const ctx = await getAuthContext();
+  // Use member-centric RPC: member_has_permission(p_member_id, p_permission_code)
+  // Never pass auth.users.id as p_member_id
+  if (ctx.memberId === null) {
+    return false;
+  }
   const { data, error } = await supabase.rpc(
-    "has_permission" as never,
-    { p_user_id: userId, p_permission_code: permission } as never,
+    "member_has_permission" as never,
+    { p_member_id: ctx.memberId, p_permission_code: permission } as never,
   ) as { data: boolean | null; error: Error | null };
   if (error) throw new Error(`Unable to check permission: ${error.message}`);
   return data === true;
 }
 
-export async function hasRoleServer(userId: string, role: AppRole): Promise<boolean> {
-  const supabase = await createClient();
+export async function hasRoleServer(role: AppRole): Promise<boolean> {
+  const ctx = await getAuthContext();
+  // Use member-centric RPC: member_has_role(p_member_id, p_role_code)
+  // Never pass auth.users.id as p_member_id
+  if (ctx.memberId === null) {
+    return false;
+  }
   const { data, error } = await supabase.rpc(
-    "has_role" as never,
-    { p_user_id: userId, p_role_code: role } as never,
+    "member_has_role" as never,
+    { p_member_id: ctx.memberId, p_role_code: role } as never,
   ) as { data: boolean | null; error: Error | null };
   if (error) throw new Error(`Unable to check role: ${error.message}`);
   return data === true;
