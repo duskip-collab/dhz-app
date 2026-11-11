@@ -6,17 +6,13 @@ import {
   hasAnyPermission as checkAnyPermission,
   type Permission,
 } from "./permissions";
-import {
-  mapPermissionCodes,
-  mapRoleCodes,
-  type RolePermissionEmbedRow,
-  type UserPermissionEmbedRow,
-  type UserRoleEmbedRow,
-} from "./permissions-map";
+import { mapPermissionCodes } from "./permissions-map";
 
 export interface AuthContext {
   userId: string;
   email: string | undefined;
+  memberId: string | null;
+  role: AppRole | null;
   roles: AppRole[];
   permissions: Permission[];
 }

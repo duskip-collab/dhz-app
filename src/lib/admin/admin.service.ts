@@ -4,7 +4,6 @@ import { requireAuthenticated } from "../documents/org-documents.auth";
 import { PERMISSIONS, type Permission, VISIBILITY_PERMISSIONS } from "@/lib/auth/permissions";
 import { APP_ROLES, type AppRole, ROLE_LABELS, isAppRole } from "@/lib/auth/roles";
 import {
-  computeEffectivePermissions,
   mapPermissionCodes,
   mapRoleCodes,
 } from "@/lib/auth/permissions-map";
@@ -572,45 +571,47 @@ export async function loadMemberAccessDetail(
   let directPermissions: Permission[] = [];
   let deniedPermissions: Permission[] = [];
 
-  if (adminMember.auth_user_id) {
-    const [rolesRes, permsRes, denialsRes] = await Promise.all([
-      supabase
-        .from("user_roles")
-        .select("roles!user_roles_role_id_fkey(code)")
-        .eq("user_id", adminMember.auth_user_id),
-      supabase
-        .from("user_permissions")
-        .select("permissions!user_permissions_permission_id_fkey(code)")
-        .eq("user_id", adminMember.auth_user_id),
-      supabase
-        .from("user_permission_denials")
-        .select(
-          "permissions!user_permission_denials_permission_id_fkey(code)",
-        )
-        .eq("user_id", adminMember.auth_user_id),
-    ]);
+  // Načítame z členom-viazaných tabuliek – funguje aj bez auth_user_id.
+  const [profileRes, grantsRes, denialsRes] = await Promise.all([
+    supabase
+      .from("member_access_profiles")
+      .select("role_id")
+      .eq("member_id", memberId)
+      .maybeSingle(),
+    supabase
+      .from("member_permission_grants")
+      .select("permissions!member_permission_grants_permission_id_fkey(code)")
+      .eq("member_id", memberId),
+    supabase
+      .from("member_permission_denials")
+      .select("permissions!member_permission_denials_permission_id_fkey(code)")
+      .eq("member_id", memberId),
+  ]);
 
-    if (rolesRes.error) throw createAuthError(500, "Chyba pri načítaní rolí.");
-    if (permsRes.error)
-      throw createAuthError(500, "Chyba pri načítaní oprávnení.");
-    if (denialsRes.error)
-      throw createAuthError(500, "Chyba pri načítaní odobratí.");
+  if (profileRes.error) throw createAuthError(500, "Chyba pri načítaní profilu prístupu.");
+  if (grantsRes.error) throw createAuthError(500, "Chyba pri načítaní oprávnení.");
+  if (denialsRes.error) throw createAuthError(500, "Chyba pri načítaní odobratí.");
 
-    userRoles = mapRoleCodes(
-      (rolesRes.data ?? []) as unknown as { roles: { code: string } | null }[],
-    );
-    directPermissions = mapPermissionCodes(
-      (permsRes.data ?? []) as unknown as {
-        permissions: { code: string } | null;
-      }[],
-    );
-    deniedPermissions = mapPermissionCodes(
-      (denialsRes.data ?? []) as unknown as {
-        permissions: { code: string } | null;
-      }[],
-    );
-    role = userRoles[0] ?? null;
+  // Načítame rolu z member_access_profiles
+  if (profileRes.data && profileRes.data.role_id) {
+    const roleRes = await supabase
+      .from("roles")
+      .select("code")
+      .eq("id", profileRes.data.role_id)
+      .maybeSingle();
+    if (roleRes.error) throw createAuthError(500, "Chyba pri načítaní role.");
+    if (roleRes.data && isAppRole(roleRes.data.code)) {
+      role = roleRes.data.code;
+      userRoles = [role];
+    }
   }
+
+  directPermissions = mapPermissionCodes(
+    (grantsRes.data ?? []) as unknown as { permissions: { code: string } | null }[],
+  );
+  deniedPermissions = mapPermissionCodes(
+    (denialsRes.data ?? []) as unknown as { permissions: { code: string } | null }[],
+  );
 
   let rolePermissions: Permission[] = [];
   if (userRoles.length) {
@@ -637,12 +638,6 @@ export async function loadMemberAccessDetail(
       );
     }
   }
-
-  const effective = computeEffectivePermissions(
-    rolePermissions,
-    directPermissions,
-    deniedPermissions,
-  );
 
   const permissionEntries: MemberPermissionEntry[] = VISIBILITY_PERMISSIONS.map(
     (code) => {
@@ -739,22 +734,20 @@ export async function saveMemberAccess(
   // Pôvodné hodnoty pre audit.
   const before = await loadMemberAccessDetail(memberId).catch(() => null);
 
+  // Overíme, že člen existuje (member-bound prístup – nie je potrebný auth_user_id).
   const supabase = await createClient();
   const { data: memberData, error: memErr } = await supabase
     .from("members")
-    .select("id, auth_user_id")
+    .select("id")
     .eq("id", memberId)
     .maybeSingle();
   if (memErr || !memberData) {
     throw createAuthError(404, "Člen sa nenašiel.");
   }
-  if (!memberData.auth_user_id) {
-    throw createAuthError(400, "Člen nemá vytvorený používateľský účet. Najprv vygenerujte aktivačný kód alebo pozvánku.");
-  }
-  const userId = memberData.auth_user_id;
 
-  const { data, error } = await supabase.rpc("set_member_access", {
-    p_user_id: userId,
+  // Voláme member-bound RPC – prístupy patria na members.id, nie auth.users.id.
+  const { data, error } = await supabase.rpc("set_member_access_member", {
+    p_member_id: memberId,
     p_role_code: roleCode,
     p_grant_permissions: grantPermissions,
     p_deny_permissions: denyPermissions,
@@ -783,6 +776,9 @@ export async function saveMemberAccess(
     }
     if (errCode === "unknown_role") {
       throw createAuthError(400, "Neznáma alebo nepodporovaná rola.");
+    }
+    if (errCode === "member_not_found") {
+      throw createAuthError(404, "Člen sa nenašiel.");
     }
     throw createAuthError(500, `Uloženie prístupov zlyhalo (${errCode}).`);
   }
