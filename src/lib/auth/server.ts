@@ -185,6 +185,7 @@ export async function requireRole(role: AppRole): Promise<AuthContext> {
 }
 
 export async function hasPermissionServer(permission: Permission): Promise<boolean> {
+  const supabase = createClient();
   const ctx = await getAuthContext();
   // Use member-centric RPC: member_has_permission(p_member_id, p_permission_code)
   // Never pass auth.users.id as p_member_id
@@ -200,6 +201,7 @@ export async function hasPermissionServer(permission: Permission): Promise<boole
 }
 
 export async function hasRoleServer(role: AppRole): Promise<boolean> {
+  const supabase = createClient();
   const ctx = await getAuthContext();
   // Use member-centric RPC: member_has_role(p_member_id, p_role_code)
   // Never pass auth.users.id as p_member_id
