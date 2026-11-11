@@ -33,6 +33,7 @@ import {
 import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { PERMISSIONS } from "@/lib/auth/permissions";
 
 const STATUS_TONES: Record<InvitationStatus, "green" | "blue" | "red" | "yellow"> = {
   active: "green",

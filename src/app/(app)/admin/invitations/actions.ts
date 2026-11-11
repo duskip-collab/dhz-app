@@ -79,7 +79,7 @@ export async function createInvitationAction(
   // Get selected permissions
   const permissionsRaw = formData.getAll("permissions") ?? [];
   const permissions = permissionsRaw
-    .map((p: string) => String(p).trim())
+    .map((p: FormDataEntryValue) => String(p).trim())
     .filter((p: string) => p.length > 0);
 
   try {
