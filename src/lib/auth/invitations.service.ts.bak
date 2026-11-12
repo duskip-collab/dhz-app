@@ -1,0 +1,466 @@
+/** Assign permissions from invitation to user */
+async function assignPermissionsFromInvitation(invitationId: string, userId: string): Promise<void> {
+  const supabase = await createClient();
+
+  // Get permissions associated with this invitation
+  const { data: permRows, error: permError } = await supabase
+    .from("invitation_permissions")
+    .select("permission_id")
+    .eq("invitation_id", invitationId);
+
+  if (permError) {
+    console.error("[assignPermissionsFromInvitation] Error fetching invitation permissions:", permError.message);
+    return;
+  }
+
+  if (!permRows || permRows.length === 0) {
+    return;
+  }
+
+  // Extract permission IDs and assign to user
+  const permissionIds = permRows.map((row) => row.permission_id).filter(
+    (id): id is string => id !== null && id !== undefined,
+  );
+
+  if (permissionIds.length === 0) {
+    return;
+  }
+
+  // Insert into user_permissions
+  const { error: insertError } = await supabase.from("user_permissions").insert(
+    permissionIds.map((permissionId) => ({
+      user_id: userId,
+      permission_id: permissionId,
+      granted_by: userId,
+    })),
+  );
+
+  if (insertError) {
+    console.error("[assignPermissionsFromInvitation] Error assigning permissions to user:", insertError.message);
+  }
+}
+
+/** K17.5 – Serverová služba pre správu pozývacích kódov.
+//
+// BEZPEČNOSTNÉ ZÁSADY:
+//  - Raw pozývací kód sa v DB ukladá IBA ako SHA-256 hash (`code_hash`).
+//  - Raw kód sa vracia IBA raz – z `createInvitation()`.
+//  - Kód sa NIKDY nevykresľuje do logov, auditu, URL ani localStorage.
+//  - Rola sa odosiela ako KÓD (whitelist), nie ako role_id.
+//  - Jednorazovosť a expiráciu vynucuje DB (RPC claim_invitation_code).
+//  - `admin.users` je jediný zdroj pravdy pre oprávnenie (zhoda s RLS).
+
+import { createClient } from "@/lib/supabase/server";
+import { requirePermission } from "@/lib/auth/server";
+import { PERMISSIONS } from "@/lib/auth/permissions";
+import { isAppRole, type AppRole } from "@/lib/auth/roles";
+import { createAuthError } from "@/lib/members/members.errors";
+import {
+  generateInvitationCode,
+  hashInvitationCode,
+} from "./invitations.share";
+import {
+  INVITATION_DEFAULT_MAX_USES,
+  INVITATION_DEFAULT_VALIDITY_DAYS,
+  INVITATION_MAX_USES_LIMIT,
+  type CreateInvitationParams,
+  type CreatedInvitation,
+  type Invitation,
+  type InvitationClaimResult,
+  type InvitationStatus,
+  type InvitationVerification,
+} from "./invitations.types";
+
+// =============================================================================
+// VALIDÁCIA
+// =============================================================================
+
+function isValidEmail(value: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
+
+function assertRole(role: string): asserts role is AppRole {
+  if (!isAppRole(role)) {
+    throw createAuthError(400, "Neplatná rola.");
+  }
+}
+
+function toInvitation(row: {
+  id: string;
+  role: string;
+  status: string;
+  use_count: number;
+  max_uses: number;
+  expires_at: string;
+  target_email: string | null;
+  member_id: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+  created_by: string;
+}): Invitation {
+  assertRole(row.role);
+  return {
+    id: row.id,
+    role: row.role,
+    status: row.status as InvitationStatus,
+    use_count: row.use_count,
+    max_uses: row.max_uses,
+    expires_at: row.expires_at,
+    target_email: row.target_email,
+    member_id: row.member_id,
+    notes: row.notes,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+    created_by: row.created_by,
+  };
+}
+
+// =============================================================================
+// VYTVORENIE POZVÁNKY
+// =============================================================================
+
+/**
+ * createInvitation – vytvorí pozývaciu pozvánku.
+ *
+ * Vyžaduje oprávnenie `admin.users` (fail-closed).
+ * Vracia raw kód – IBA raz. Caller je povinný ho zobraziť a po zatvorení
+ * dialógu odstrániť zo stavu.
+ */
+export async function createInvitation(
+  params: CreateInvitationParams,
+): Promise<CreatedInvitation> {
+  await requirePermission(PERMISSIONS.ADMIN_USERS);
+  assertRole(params.role);
+
+  const maxUses = params.maxUses ?? INVITATION_DEFAULT_MAX_USES;
+  if (!Number.isInteger(maxUses) || maxUses < 1 || maxUses > INVITATION_MAX_USES_LIMIT) {
+    throw createAuthError(400, "Neplatný počet povolených použití kódu.");
+  }
+
+  const validDays = params.validDays ?? INVITATION_DEFAULT_VALIDITY_DAYS;
+  if (!Number.isFinite(validDays) || validDays <= 0 || validDays > 365) {
+    throw createAuthError(400, "Neplatná dĺžka platnosti kódu.");
+  }
+
+  let targetEmail: string | null = null;
+  if (params.targetEmail && params.targetEmail.trim()) {
+    targetEmail = params.targetEmail.trim().toLowerCase();
+    if (!isValidEmail(targetEmail)) {
+      throw createAuthError(400, "Neplatná e-mailová adresa.");
+    }
+  }
+
+  const code = generateInvitationCode();
+  const codeHash = await hashInvitationCode(code);
+  const expiresAt = new Date(Date.now() + validDays * 24 * 60 * 60 * 1000);
+
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("create_invitation" as never, {
+    p_role_code: params.role,
+    p_code_hash: codeHash,
+    p_expires_at: expiresAt.toISOString(),
+    p_target_email: targetEmail,
+    p_member_id: params.memberId ?? null,
+    p_max_uses: maxUses,
+    p_notes: params.notes ?? null,
+  } as never);
+
+  if (error) {
+    // Chyba sa NEVYKRESĽUJE s detailom kódu.
+    console.error("[createInvitation] RPC error:", error.message);
+    throw createAuthError(500, "Pozvánku sa nepodarilo vytvoriť.");
+  }
+
+  const invitationId = typeof data === "string" ? data : null;
+  if (!invitationId) {
+    throw createAuthError(500, "Pozvánku sa nepodarilo vytvoriť.");
+  }
+
+  // Store associated permissions if provided
+  if (params.permissions && params.permissions.length > 0) {
+    // Look up permission IDs from the permissions table
+    const { data: permRows, error: permQueryError } = await supabase
+      .from("permissions")
+      .select("id, code")
+      .in("code", params.permissions);
+
+    if (permQueryError) {
+      console.error(
+        "[createInvitation] Error querying permissions:",
+        permQueryError.message,
+      );
+      // Continue without storing permissions in DB, but log the error
+    } else if (permRows && permRows.length > 0) {
+      // Map permission codes to IDs
+      const permissionIdMap: Record<string, string> = {};
+      permRows.forEach((row) => {
+        if (row.id && row.code) {
+          permissionIdMap[row.code] = row.id;
+        }
+      });
+
+      // Insert into invitation_permissions for valid permissions
+      const permissionInserts = params.permissions
+        .filter((code) => permissionIdMap[code])
+        .map((code) => ({
+          invitation_id: invitationId,
+          permission_id: permissionIdMap[code],
+        }));
+
+      if (permissionInserts.length > 0) {
+        const { error: permInsertError } = await supabase
+          .from("invitation_permissions")
+          .insert(permissionInserts);
+
+        if (permInsertError) {
+          console.error(
+            "[createInvitation] Error storing invitation permissions:",
+            permInsertError.message,
+          );
+        }
+      }
+    }
+  }
+
+  const invitation = await getInvitationById(invitationId);
+  if (!invitation) {
+    throw createAuthError(500, "Pozvánku sa nepodarilo načítať.");
+  }
+
+  return { invitation, code, codeHash };
+}
+
+// =============================================================================
+// ČÍTANIE
+// =============================================================================
+
+/**
+ * listInvitations – zoznam pozvánok pre admina.
+ * Vracia sanitizované údaje (bez `code_hash`).
+ */
+export async function listInvitations(
+  limit = 100,
+  offset = 0,
+): Promise<Invitation[]> {
+  await requirePermission(PERMISSIONS.ADMIN_USERS);
+
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("list_invitations" as never, {
+    p_limit: limit,
+    p_offset: offset,
+  } as never);
+
+  if (error) {
+    console.error("[listInvitations] RPC error:", error.message);
+    throw createAuthError(500, "Pozvánky sa nepodarilo načítať.");
+  }
+
+  const rows = (data ?? []) as Array<Parameters<typeof toInvitation>[0]>;
+  return rows.map(toInvitation);
+}
+
+/**
+ * getInvitationById – načíta jednu pozvánku (bez `code_hash`).
+ */
+export async function getInvitationById(id: string): Promise<Invitation | null> {
+  await requirePermission(PERMISSIONS.ADMIN_USERS);
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("invitations")
+    .select(
+      "id, role, status, use_count, max_uses, expires_at, target_email, member_id, notes, created_at, updated_at, created_by",
+    )
+    .eq("id", id)
+    .maybeSingle();
+
+  if (error) {
+    console.error("[getInvitationById] query error:", error.message);
+    throw createAuthError(500, "Pozvánku sa nepodarilo načítať.");
+  }
+
+  if (!data) return null;
+  return toInvitation(data as Parameters<typeof toInvitation>[0]);
+}
+
+// =============================================================================
+// ZRUŠENIE
+// =============================================================================
+
+/**
+ * revokeInvitation – zruší pozvánku (soft delete: status='revoked').
+ * DELETE je zámerne nedostupné (auditácia).
+ */
+export async function revokeInvitation(invitationId: string): Promise<void> {
+  await requirePermission(PERMISSIONS.ADMIN_USERS);
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("revoke_invitation" as never, {
+    p_invitation_id: invitationId,
+  } as never);
+
+  if (error) {
+    console.error("[revokeInvitation] RPC error:", error.message);
+    throw createAuthError(500, "Pozvánku sa nepodarilo zrušiť.");
+  }
+}
+
+// =============================================================================
+// OVERENIE A UPLATNENIE (REGISTRAČNÝ TOK)
+// =============================================================================
+
+/**
+ * verifyInvitationCode – overí kód BEZ spotrebovania.
+ * Použiteľné v registračnom formulári pred potvrdením e-mailu.
+ */
+export async function verifyInvitationCode(
+  code: string,
+): Promise<InvitationVerification | null> {
+  const normalized = code.trim();
+  if (!normalized) return null;
+
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("verify_invitation_code" as never, {
+    p_code: normalized,
+  } as never);
+
+  if (error) {
+    console.error("[verifyInvitationCode] RPC error:", error.message);
+    return null;
+  }
+
+  const rows = (data ?? []) as Array<{
+    invitation_id: string;
+    role: string;
+    status: string;
+    is_valid: boolean;
+    expires_at: string;
+    use_count: number;
+    max_uses: number;
+  }>;
+
+  const row = rows[0];
+  if (!row || !isAppRole(row.role)) return null;
+
+  return {
+    invitation_id: row.invitation_id,
+    role: row.role,
+    status: row.status as InvitationStatus,
+    is_valid: row.is_valid,
+    expires_at: row.expires_at,
+    use_count: row.use_count,
+    max_uses: row.max_uses,
+  };
+}
+
+/**
+ * claimInvitationCode – atomicky uplatní kód a pridá rolu používateľovi.
+ *
+ * Jednorazovosť je vynútená databázou; pri súbežných požiadavkách vyhrá
+ * iba jeden. Rola pochádza IBA z pozvánky.
+ *
+ * Identita používateľa pochádza zo serverovej session. RPC overí, že
+ * `p_user_id` zodpovedá `auth.uid()`; service-role klient sa nepoužíva.
+ */
+export async function claimInvitationCode(code: string): Promise<InvitationClaimResult> {
+  const normalized = code.trim();
+  if (!normalized) {
+    return { success: false, error: "invalid_code" };
+  }
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser();
+
+  if (userError || !user) {
+    return { success: false, error: "unknown" };
+  }
+
+  const { data, error } = await supabase.rpc("claim_invitation_code" as never, {
+    p_code: normalized,
+    p_user_id: user.id,
+    p_email: user.email ?? "",
+  } as never);
+
+  if (error) {
+    console.error("[claimInvitationCode] RPC error:", error.message);
+    return { success: false, error: "unknown" };
+  }
+
+  if (!isRecord(data)) {
+    return { success: false, error: "unknown" };
+  }
+
+  if (data.success !== true) {
+    if (data.error === "code_unusable" || data.error === "invalid_code") {
+      return { success: false, error: data.error };
+    }
+    return { success: false, error: "unknown" };
+  }
+
+  if (typeof data.invitation_id !== "string" || typeof data.role !== "string" || !isAppRole(data.role)) {
+    return { success: false, error: "unknown" };
+  }
+
+  // Assign associated permissions from the invitation
+  try {
+    await assignPermissionsFromInvitation(data.invitation_id, user.id);
+  } catch (e) {
+    console.error("[claimInvitationCode] Error assigning permissions:", e);
+    // Not failing the whole operation - role is assigned, permissions failed
+  }
+
+  return {
+    success: true,
+    invitation_id: data.invitation_id,
+    role: data.role,
+  };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+/** Assign permissions from invitation to user */
+async function assignPermissionsFromInvitation(invitationId: string, userId: string): Promise<void> {
+  const supabase = await createClient();
+
+  // Get permissions associated with this invitation
+  const { data: permRows, error: permError } = await supabase
+    .from("invitation_permissions")
+    .select("permission_id")
+    .eq("invitation_id", invitationId);
+
+  if (permError) {
+    console.error("[assignPermissionsFromInvitation] Error fetching invitation permissions:", permError.message);
+    return;
+  }
+
+  if (!permRows || permRows.length === 0) {
+    return;
+  }
+
+  // Extract permission IDs and assign to user
+  const permissionIds = permRows.map((row) => row.permission_id).filter(
+    (id): id is string => id !== null && id !== undefined,
+  );
+
+  if (permissionIds.length === 0) {
+    return;
+  }
+
+  // Insert into user_permissions
+  const { error: insertError } = await supabase.from("user_permissions").insert(
+    permissionIds.map((permissionId) => ({
+      user_id: userId,
+      permission_id: permissionId,
+      granted_by: userId,
+    })),
+  );
+
+  if (insertError) {
+    console.error("[assignPermissionsFromInvitation] Error assigning permissions to user:", insertError.message);
+  }
+}
+}
