@@ -40,7 +40,7 @@ export async function verifyInvitationCodeAction(code: string): Promise<VerifyCo
   return {
     ok: true,
     role: verification.role,
-    roleLabel: ROLE_LABELS[verification.role] ?? verification.role,
+    roleLabel: ROLE_LABELS[verification.role as AppRole] ?? verification.role,
     expiresAt: verification.expires_at,
   };
 }
@@ -66,7 +66,7 @@ export async function acceptInvitationAction(code: string): Promise<AcceptInvita
   return {
     ok: true,
     message: "Registrácia bola dokončená – rola bola priradená.",
-    roleLabel: result.role ? (ROLE_LABELS[result.role] ?? result.role) : undefined,
+    roleLabel: result.role ? (ROLE_LABELS[result.role as AppRole] ?? result.role) : undefined,
   };
 }
 
@@ -140,7 +140,7 @@ export async function registerWithInvitationCodeAction(
   }
 
   const role = claimResult.role;
-  const roleLabel = ROLE_LABELS[role] ?? role;
+  const roleLabel = ROLE_LABELS[role as AppRole] ?? role;
 
   return {
     success: true,

@@ -446,7 +446,7 @@ export function InvitationManager({
                       className="w-4 h-4 rounded bg-gray-200 border-gray-300 focus:ring-[#C62828] focus:ring-offset-2 cursor-pointer accent-[#C62828]"
                     />
                     <span className="ml-2 text-sm text-gray-700 line-through opacity-0 opacity-0 hover:opacity-100 transition opacity">
-                      {PERMISSIONS[perm]}
+                      {perm}
                     </span>
                   </div>
                 ))}
