@@ -30,6 +30,10 @@ const PERMISSION_LABELS: Record<string, string> = {
   "reports.view": "Reporty – zobraziť",
 };
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
 export function AdminMemberManager({
   member,
   onClose,
@@ -43,8 +47,18 @@ export function AdminMemberManager({
   const [statusState] = useActionState(getMemberInvitationStatusAction, null);
   const [showCode, setShowCode] = useState<string | null>(null);
   const accessStatus: string | null = null;
-  const generatedCode = codeState?.ok ? codeState.data?.code ?? null : null;
-  const generatedCodeKind = codeState?.ok ? codeState.data?.kind : undefined;
+  const generatedCode =
+    codeState?.ok &&
+    isRecord(codeState.data) &&
+    typeof codeState.data.code === "string"
+      ? codeState.data.code
+      : null;
+  const generatedCodeKind =
+    codeState?.ok &&
+    isRecord(codeState.data) &&
+    (codeState.data.kind === "invitation" || codeState.data.kind === "login")
+      ? codeState.data.kind
+      : undefined;
   const visibleCode = showCode === generatedCode ? showCode : null;
 
   const handleShareCode = async () => {

@@ -14,7 +14,7 @@ import {
   revokeActivationCode,
   listActivationCodesForMember,
 } from "@/lib/admin/admin.service";
-import { PERMISSIONS, type Permission } from "@/lib/auth/permissions";
+import { isPermission, PERMISSIONS, type Permission } from "@/lib/auth/permissions";
 import { getAuthContext } from "@/lib/auth/server";
 import { isAppRole, type AppRole } from "@/lib/auth/roles";
 
@@ -22,7 +22,7 @@ type AdminActionState =
   | {
       ok: true;
       message?: string;
-      data?: any;
+      data?: unknown;
     }
   | { ok: false; errors?: Record<string, string>; message: string };
 
@@ -35,6 +35,22 @@ function statusMessage(e: unknown, fallback: string): string {
   if (status === 403) return "Nemáte oprávnenie na túto akciu.";
   if (status === 404) return "Používateľ sa nenašiel.";
   return e instanceof Error && e.message ? e.message : fallback;
+}
+
+function parsePermissions(raw: string): Permission[] | null {
+  let value: unknown;
+  try {
+    value = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+  if (!Array.isArray(value) || !value.every(
+    (permission): permission is Permission =>
+      typeof permission === "string" && isPermission(permission),
+  )) {
+    return null;
+  }
+  return value;
 }
 
 /**
@@ -242,12 +258,9 @@ export async function saveMemberAccessAction(
     return fail("Neplatný kód role.");
   }
 
-  let grantPermissions: Permission[] = [];
-  let denyPermissions: Permission[] = [];
-  try {
-    grantPermissions = JSON.parse(grantRaw);
-    denyPermissions = JSON.parse(denyRaw);
-  } catch {
+  const grantPermissions = parsePermissions(grantRaw);
+  const denyPermissions = parsePermissions(denyRaw);
+  if (!grantPermissions || !denyPermissions) {
     return fail("Neplatný zoznam oprávnení.");
   }
 
@@ -286,15 +299,22 @@ export async function generateActivationCodeAction(
     return fail("Neplatný kód role.");
   }
 
-  let permissions: Permission[] = [];
-  let validityDays = 14;
-  let maxUses = 1;
+  let permissions: Permission[] | null;
+  const validityDays = Number.parseInt(validityDaysRaw, 10);
+  const maxUses = Number.parseInt(maxUsesRaw, 10);
   try {
-    permissions = JSON.parse(permRaw);
-    validityDays = Number.parseInt(validityDaysRaw, 10) || 14;
-    maxUses = Number.parseInt(maxUsesRaw, 10) || 1;
+    permissions = parsePermissions(permRaw);
   } catch {
     return fail("Neplatné parametre kódu.");
+  }
+  if (!Number.isInteger(validityDays) || validityDays < 1 || validityDays > 365) {
+    return fail("Neplatná platnosť kódu (1 – 365 dní).");
+  }
+  if (!permissions) {
+    return fail("Neplatný zoznam oprávnení.");
+  }
+  if (maxUses !== 1) {
+    return fail("Aktivačný kód musí byť jednorazový.");
   }
 
   try {

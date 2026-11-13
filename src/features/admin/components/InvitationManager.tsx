@@ -78,9 +78,16 @@ async function copyToClipboard(text: string): Promise<boolean> {
 
 export function InvitationManager({
   invitations,
+  members,
   registrationUrl: registrationUrlProp = null,
 }: {
   invitations: Invitation[];
+  members: Array<{
+    id: string;
+    member_number: string;
+    first_name: string;
+    last_name: string;
+  }>;
   /** Absolútna URL aplikácie vypočítaná na serveri (Vercel). */
   registrationUrl?: string | null;
 }) {
@@ -351,6 +358,30 @@ export function InvitationManager({
       {showCreate ? (
         <Card title="Vytvoriť pozvánku">
           <form action={createAction} className="space-y-4">
+            <div>
+              <label htmlFor="inv-member" className="block text-sm font-medium text-gray-700 mb-1.5">
+                Člen bez používateľského účtu
+              </label>
+              <select
+                id="inv-member"
+                name="member_id"
+                required
+                defaultValue=""
+                className="w-full min-h-[44px] rounded-lg border border-gray-300 bg-white px-3 text-sm outline-none transition focus:border-[#C62828] focus:ring-2 focus:ring-[#C62828]"
+              >
+                <option value="" disabled>Vyberte člena</option>
+                {members.map((member) => (
+                  <option key={member.id} value={member.id}>
+                    {member.member_number} · {member.first_name} {member.last_name}
+                  </option>
+                ))}
+              </select>
+              {members.length === 0 ? (
+                <p className="mt-1 text-sm text-amber-700">
+                  Nie sú dostupní aktívni členovia bez používateľského účtu.
+                </p>
+              ) : null}
+            </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
                 <label htmlFor="inv-role" className="block text-sm font-medium text-gray-700 mb-1.5">
@@ -387,21 +418,6 @@ export function InvitationManager({
                     </option>
                   ))}
                 </select>
-              </div>
-
-              <div>
-                <label htmlFor="inv-max-uses" className="block text-sm font-medium text-gray-700 mb-1.5">
-                  Maximálny počet použití
-                </label>
-                <input
-                  id="inv-max-uses"
-                  name="max_uses"
-                  type="number"
-                  min={1}
-                  max={100}
-                  defaultValue={1}
-                  className="w-full min-h-[44px] rounded-lg border border-gray-300 px-3 text-sm outline-none transition focus:border-[#C62828] focus:ring-2 focus:ring-[#C62828]"
-                />
               </div>
 
               <div>
@@ -464,7 +480,7 @@ export function InvitationManager({
             <div className="flex flex-wrap gap-3">
               <button
                 type="submit"
-                disabled={createPending}
+                disabled={createPending || members.length === 0}
                 className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg bg-[#C62828] px-4 text-sm font-semibold text-white transition hover:bg-[#8E0000] disabled:opacity-50"
               >
                 {createPending ? (

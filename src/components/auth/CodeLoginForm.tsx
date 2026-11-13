@@ -61,7 +61,7 @@ export function CodeLoginForm({
             type="text"
             value={code}
             onChange={(e) => setCode(e.target.value)}
-            placeholder="napr. K7X2-Q9P4"
+            placeholder="napr. 550E8400-E29B-41D4-A716-446655440000"
             autoComplete="one-time-code"
             className="w-full pl-12 pr-4 py-3 rounded-lg border border-gray-300 font-mono uppercase tracking-widest text-center focus:ring-2 focus:ring-[#C62828] focus:border-transparent outline-none transition min-h-[48px]"
             required

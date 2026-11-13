@@ -21,7 +21,6 @@ import {
 import {
   INVITATION_DEFAULT_MAX_USES,
   INVITATION_DEFAULT_VALIDITY_DAYS,
-  INVITATION_MAX_USES_LIMIT,
   type CreateInvitationParams,
   type CreatedInvitation,
   type Invitation,
@@ -29,48 +28,6 @@ import {
   type InvitationStatus,
   type InvitationVerification,
 } from "./invitations.types";
-
-/** Assign permissions from invitation to user */
-async function assignPermissionsFromInvitation(invitationId: string, userId: string): Promise<void> {
-  const supabase = await createClient();
-
-  // Get permissions associated with this invitation
-  const { data: permRows, error: permError } = await supabase
-    .from("invitation_permissions")
-    .select("permission_id")
-    .eq("invitation_id", invitationId);
-
-  if (permError) {
-    console.error("[assignPermissionsFromInvitation] Error fetching invitation permissions:", permError.message);
-    return;
-  }
-
-  if (!permRows || permRows.length === 0) {
-    return;
-  }
-
-  // Extract permission IDs and assign to user
-  const permissionIds = permRows.map((row) => row.permission_id).filter(
-    (id): id is string => id !== null && id !== undefined,
-  );
-
-  if (permissionIds.length === 0) {
-    return;
-  }
-
-  // Insert into user_permissions
-  const { error: insertError } = await supabase.from("user_permissions").insert(
-    permissionIds.map((permissionId) => ({
-      user_id: userId,
-      permission_id: permissionId,
-      granted_by: userId,
-    })),
-  );
-
-  if (insertError) {
-    console.error("[assignPermissionsFromInvitation] Error assigning permissions to user:", insertError.message);
-  }
-}
 
 // =============================================================================
 // VALIDÁCIA
@@ -135,8 +92,11 @@ export async function createInvitation(
   assertRole(params.role);
 
   const maxUses = params.maxUses ?? INVITATION_DEFAULT_MAX_USES;
-  if (!Number.isInteger(maxUses) || maxUses < 1 || maxUses > INVITATION_MAX_USES_LIMIT) {
-    throw createAuthError(400, "Neplatný počet povolených použití kódu.");
+  if (!Number.isInteger(maxUses) || maxUses !== 1) {
+    throw createAuthError(400, "Pozývací kód musí byť jednorazový.");
+  }
+  if (!params.memberId) {
+    throw createAuthError(400, "Pozvánka musí byť naviazaná na konkrétneho člena.");
   }
 
   const validDays = params.validDays ?? INVITATION_DEFAULT_VALIDITY_DAYS;
@@ -157,15 +117,29 @@ export async function createInvitation(
   const expiresAt = new Date(Date.now() + validDays * 24 * 60 * 60 * 1000);
 
   const supabase = await createClient();
-  const { data, error } = await supabase.rpc("create_invitation" as never, {
+  const { data: member, error: memberError } = await supabase
+    .from("members")
+    .select("id, auth_user_id, status")
+    .eq("id", params.memberId)
+    .maybeSingle();
+  if (memberError) {
+    console.error("[createInvitation] Member lookup error:", memberError.message);
+    throw createAuthError(500, "Člena sa nepodarilo overiť.");
+  }
+  if (!member || member.status !== "active" || member.auth_user_id !== null) {
+    throw createAuthError(400, "Pozvánku možno vytvoriť iba pre aktívneho člena bez účtu.");
+  }
+
+  const { data, error } = await supabase.rpc("create_invitation", {
     p_role_code: params.role,
     p_code_hash: codeHash,
     p_expires_at: expiresAt.toISOString(),
     p_target_email: targetEmail,
-    p_member_id: params.memberId ?? null,
+    p_member_id: params.memberId,
     p_max_uses: maxUses,
     p_notes: params.notes ?? null,
-  } as never);
+    p_permission_codes: params.permissions ?? [],
+  });
 
   if (error) {
     // Chyba sa NEVYKRESĽUJE s detailom kódu.
@@ -176,52 +150,6 @@ export async function createInvitation(
   const invitationId = typeof data === "string" ? data : null;
   if (!invitationId) {
     throw createAuthError(500, "Pozvánku sa nepodarilo vytvoriť.");
-  }
-
-  // Store associated permissions if provided
-  if (params.permissions && params.permissions.length > 0) {
-    // Look up permission IDs from the permissions table
-    const { data: permRows, error: permQueryError } = await supabase
-      .from("permissions")
-      .select("id, code")
-      .in("code", params.permissions);
-
-    if (permQueryError) {
-      console.error(
-        "[createInvitation] Error querying permissions:",
-        permQueryError.message,
-      );
-      // Continue without storing permissions in DB, but log the error
-    } else if (permRows && permRows.length > 0) {
-      // Map permission codes to IDs
-      const permissionIdMap: Record<string, string> = {};
-      permRows.forEach((row) => {
-        if (row.id && row.code) {
-          permissionIdMap[row.code] = row.id;
-        }
-      });
-
-      // Insert into invitation_permissions for valid permissions
-      const permissionInserts = params.permissions
-        .filter((code) => permissionIdMap[code])
-        .map((code) => ({
-          invitation_id: invitationId,
-          permission_id: permissionIdMap[code],
-        }));
-
-      if (permissionInserts.length > 0) {
-        const { error: permInsertError } = await supabase
-          .from("invitation_permissions")
-          .insert(permissionInserts);
-
-        if (permInsertError) {
-          console.error(
-            "[createInvitation] Error storing invitation permissions:",
-            permInsertError.message,
-          );
-        }
-      }
-    }
   }
 
   const invitation = await getInvitationById(invitationId);
@@ -405,14 +333,6 @@ export async function claimInvitationCode(code: string): Promise<InvitationClaim
 
   if (typeof data.invitation_id !== "string" || typeof data.role !== "string" || !isAppRole(data.role)) {
     return { success: false, error: "unknown" };
-  }
-
-  // Assign associated permissions from the invitation
-  try {
-    await assignPermissionsFromInvitation(data.invitation_id, user.id);
-  } catch (e) {
-    console.error("[claimInvitationCode] Error assigning permissions:", e);
-    // Not failing the whole operation - role is assigned, permissions failed
   }
 
   return {

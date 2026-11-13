@@ -4,12 +4,25 @@ import { requirePermission } from "@/lib/auth/server";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { listInvitations } from "@/lib/auth/invitations.service";
 import { getServerRegistrationUrl } from "@/lib/auth/invitations.share";
+import { createClient } from "@/lib/supabase/server";
 import { InvitationManager } from "@/features/admin/components/InvitationManager";
 
 export default async function InvitationsPage() {
   await requirePermission(PERMISSIONS.ADMIN_USERS);
 
   const invitations = await listInvitations();
+  const supabase = await createClient();
+  const { data: memberRows, error: membersError } = await supabase
+    .from("members")
+    .select("id, member_number, first_name, last_name")
+    .eq("status", "active")
+    .is("auth_user_id", null)
+    .order("last_name", { ascending: true })
+    .order("first_name", { ascending: true })
+    .limit(1000);
+  if (membersError) {
+    throw new Error(`Pozvánkových členov sa nepodarilo načítať: ${membersError.message}`);
+  }
 
   // Absolútna URL aplikácie (Vercel: NEXT_PUBLIC_APP_URL / VERCEL_*).
   // Vypočítané na serveri, aby zdieľací text obsahoval vždy platný odkaz.
@@ -35,7 +48,11 @@ export default async function InvitationsPage() {
         </p>
       </div>
 
-      <InvitationManager invitations={invitations} registrationUrl={registrationUrl} />
+      <InvitationManager
+        invitations={invitations}
+        members={memberRows ?? []}
+        registrationUrl={registrationUrl}
+      />
     </div>
   );
 }

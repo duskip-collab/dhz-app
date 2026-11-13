@@ -274,7 +274,7 @@ export function MemberAccessEditor({
     await codeAction(Object.assign(new FormData(), {
       member_id: detail.member.member_id,
       role_code: (detail.role ?? APP_ROLES.CLEN) as AppRole,
-      permissions: JSON.stringify(detail.permissions.filter((p) => p.source !== "none" && p.source !== "denied").map((p) => p.code)),
+      permissions: JSON.stringify(detail.permissions.filter((p) => p.source === "granted").map((p) => p.code)),
       validity_days: "14",
       max_uses: "1",
     }));

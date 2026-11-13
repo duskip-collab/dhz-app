@@ -1,12 +1,16 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { hasRole as checkRole, type AppRole } from "./roles";
+import { hasRole as checkRole, isAppRole, type AppRole } from "./roles";
 import {
   hasPermission as checkPermission,
   hasAnyPermission as checkAnyPermission,
   type Permission,
 } from "./permissions";
-import { mapPermissionCodes, mapRoleCodes, type UserRoleEmbedRow, type RolePermissionEmbedRow, type UserPermissionEmbedRow } from "./permissions-map";
+import {
+  computeEffectivePermissions,
+  isActiveMemberAccessProfile,
+  mapPermissionCodes,
+} from "./permissions-map";
 
 export interface AuthContext {
   userId: string;
@@ -23,13 +27,8 @@ function isMissingAuthSessionError(error: { message?: string } | null): boolean 
 }
 
 /**
- * Server-side: nacita aktualneho usera + jeho role a permisies z DB.
- * Skutočná schéma (migrácia 20261006): tabuľky roles, permissions,
- * role_permissions(role_id, permission_id), user_roles(user_id, role_id),
- * user_permissions(user_id, permission_id) — všetko cez UUID FK + JOIN
- * na definition tabuľky; kódy sa čítajú z roles.code / permissions.code.
- * Chyba databázy → Error (nie redirect) — fail-closed, info v správe.
- * Ak nie je prihlaseny -> redirect na /login.
+ * Resolves the current auth user to a member and derives access from the
+ * member-bound profile, role permissions, grants, and denials.
  */
 export async function getAuthContext(): Promise<AuthContext> {
   const supabase = await createClient();
@@ -41,106 +40,115 @@ export async function getAuthContext(): Promise<AuthContext> {
   if (userError) throw new Error(`Unable to load authenticated user: ${userError.message}`);
   if (!user) redirect("/login");
 
-  // Look up the member record using auth_user_id - member UUID is DIFFERENT from auth UUID
-  const { data: memberResult, error: memberError } = await supabase
+  const { data: member, error: memberError } = await supabase
     .from("members")
     .select("id")
     .eq("auth_user_id", user.id)
-    .single();
+    .maybeSingle();
 
-  if (memberError || !memberResult) {
-    // Member does not exist - this user is not a registered member
-    return { userId: user.id, email: user.email, memberId: null, role: null, roles: [], permissions: [] };
+  if (memberError) {
+    throw new Error(`Unable to load member profile: ${memberError.message}`);
   }
 
-  const memberId = memberResult.id;
+  const memberId = member?.id ?? null;
+  if (!memberId) {
+    return {
+      userId: user.id,
+      email: user.email,
+      memberId: null,
+      role: null,
+      roles: [],
+      permissions: [],
+    };
+  }
 
-  const [userRolesResult, directPermissionsResult] = await Promise.all([
+  const [profileResult, grantsResult, denialsResult] = await Promise.all([
     supabase
-      .from("user_roles")
-      .select("roles!user_roles_role_id_fkey(code)")
-      .eq("user_id", user.id),
+      .from("member_access_profiles")
+      .select("role_id, status")
+      .eq("member_id", memberId)
+      .maybeSingle(),
     supabase
-      .from("user_permissions")
-      .select("permissions!user_permissions_permission_id_fkey(code)")
-      .eq("user_id", user.id),
+      .from("member_permission_grants")
+      .select("permissions!member_permission_grants_permission_id_fkey(code)")
+      .eq("member_id", memberId),
+    supabase
+      .from("member_permission_denials")
+      .select("permissions!member_permission_denials_permission_id_fkey(code)")
+      .eq("member_id", memberId),
   ]);
 
-  if (userRolesResult.error) {
-    throw new Error(`Unable to load user roles: ${userRolesResult.error.message}`);
+  if (profileResult.error) {
+    throw new Error(`Unable to load member access profile: ${profileResult.error.message}`);
   }
-  if (directPermissionsResult.error) {
-    throw new Error(`Unable to load direct user permissions: ${directPermissionsResult.error.message}`);
+  if (grantsResult.error) {
+    throw new Error(`Unable to load member permission grants: ${grantsResult.error.message}`);
+  }
+  if (denialsResult.error) {
+    throw new Error(`Unable to load member permission denials: ${denialsResult.error.message}`);
   }
 
-  const roles = mapRoleCodes(
-    (userRolesResult.data ?? []) as unknown as UserRoleEmbedRow[],
-  );
+  if (!isActiveMemberAccessProfile(profileResult.data?.status)) {
+    return {
+      userId: user.id,
+      email: user.email,
+      memberId,
+      role: null,
+      roles: [],
+      permissions: [],
+    };
+  }
+
+  const roles: AppRole[] = [];
+  let rolePermissions: Permission[] = [];
+  const roleId = profileResult.data?.role_id;
+
+  if (roleId) {
+    const { data: role, error: roleError } = await supabase
+      .from("roles")
+      .select("code")
+      .eq("id", roleId)
+      .maybeSingle();
+    if (roleError) {
+      throw new Error(`Unable to load member role: ${roleError.message}`);
+    }
+    if (!role || !isAppRole(role.code)) {
+      throw new Error("Member access profile references an unknown role.");
+    }
+    roles.push(role.code);
+
+    const { data: rolePermissionRows, error: rolePermissionsError } = await supabase
+      .from("role_permissions")
+      .select("permissions!role_permissions_permission_id_fkey(code)")
+      .eq("role_id", roleId);
+    if (rolePermissionsError) {
+      throw new Error(`Unable to load role permissions: ${rolePermissionsError.message}`);
+    }
+    rolePermissions = mapPermissionCodes(
+      rolePermissionRows ?? [],
+    );
+  }
 
   const directPermissions = mapPermissionCodes(
-    (directPermissionsResult.data ?? []) as unknown as UserPermissionEmbedRow[],
+    grantsResult.data ?? [],
+  );
+  const deniedPermissions = mapPermissionCodes(
+    denialsResult.data ?? [],
+  );
+  const permissions = computeEffectivePermissions(
+    rolePermissions,
+    directPermissions,
+    deniedPermissions,
   );
 
-  // Oprávnenia cez všetky role naraz: najprv UUID rolí podľa code,
-  // potom jeden IN dotaz na role_permissions (join cez permission_id).
-  let rolePermissions: Permission[] = [];
-  if (roles.length) {
-    const rolesResult = await supabase
-      .from("roles")
-      .select<"id">("id")
-      .in("code", roles);
-    if (rolesResult.error) {
-      throw new Error(`Unable to load role ids: ${rolesResult.error.message}`);
-    }
-    // Supabase generovaný typ pre select("id") sa zdáva sa nezrovnať s reálnym
-    // Row (id je tu potrebný); explicitný cast zabezpečuje typovú
-    // bezpečnosť pri reálnom DB stave (UUID ids).
-    const roleIds = ((rolesResult.data ?? []) as { id: string }[]).map(
-      (r) => r.id,
-    );
-    if (roleIds.length) {
-      const rolePermissionsResult = await supabase
-        .from("role_permissions")
-        .select("permissions!role_permissions_permission_id_fkey(code)")
-        .in("role_id", roleIds);
-      if (rolePermissionsResult.error) {
-        throw new Error(
-          `Unable to load role permissions: ${rolePermissionsResult.error.message}`,
-        );
-      }
-      rolePermissions = mapPermissionCodes(
-        (rolePermissionsResult.data ?? []) as unknown as RolePermissionEmbedRow[],
-      );
-    }
-  }
-
-  // Efektívne oprávnenia = (opravnenia z rolí ∨ priame individuálne granty)
-  //                        \ explicitné odobratia (denials).
-  // Musí byť konzistentné s public.has_permission() v databáze.
-  let deniedPermissions: Permission[] = [];
-  if (roles.length || directPermissions.length) {
-    const deniedResult = await supabase
-      .from("user_permission_denials")
-      .select("permissions!user_permission_denials_permission_id_fkey(code)")
-      .eq("user_id", user.id);
-    if (deniedResult.error) {
-      throw new Error(
-        `Unable to load denied permissions: ${deniedResult.error.message}`,
-      );
-    }
-    deniedPermissions = mapPermissionCodes(
-      (deniedResult.data ?? []) as unknown as UserPermissionEmbedRow[],
-    );
-  }
-
-  const allPermissions = Array.from(
-    new Set([...rolePermissions, ...directPermissions]),
-  );
-  const permissions = allPermissions.filter(
-    (p) => !deniedPermissions.includes(p),
-  );
-
-  return { userId: user.id, email: user.email, memberId, role: roles.length ? roles[0] : null, roles, permissions };
+  return {
+    userId: user.id,
+    email: user.email,
+    memberId,
+    role: roles[0] ?? null,
+    roles,
+    permissions,
+  };
 }
 
 export async function requirePermission(permission: Permission): Promise<AuthContext> {
@@ -192,10 +200,10 @@ export async function hasPermissionServer(permission: Permission): Promise<boole
   if (ctx.memberId === null) {
     return false;
   }
-  const { data, error } = await supabase.rpc(
-    "member_has_permission" as never,
-    { p_member_id: ctx.memberId, p_permission_code: permission } as never,
-  ) as { data: boolean | null; error: Error | null };
+  const { data, error } = await supabase.rpc("member_has_permission", {
+    p_member_id: ctx.memberId,
+    p_permission_code: permission,
+  });
   if (error) throw new Error(`Unable to check permission: ${error.message}`);
   return data === true;
 }
@@ -208,10 +216,10 @@ export async function hasRoleServer(role: AppRole): Promise<boolean> {
   if (ctx.memberId === null) {
     return false;
   }
-  const { data, error } = await supabase.rpc(
-    "member_has_role" as never,
-    { p_member_id: ctx.memberId, p_role_code: role } as never,
-  ) as { data: boolean | null; error: Error | null };
+  const { data, error } = await supabase.rpc("member_has_role", {
+    p_member_id: ctx.memberId,
+    p_role_code: role,
+  });
   if (error) throw new Error(`Unable to check role: ${error.message}`);
   return data === true;
 }

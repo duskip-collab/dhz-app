@@ -9,7 +9,7 @@ export type LoginCheckResult = { ok: true } | { ok: false; message: string };
  * bez nutnosti session; volá anon RPC is_email_login_allowed).
  *
  * Povolené:
- *  - hlavný administrátor (rola ADMIN v user_roles),
+ *  - hlavný administrátor (rola ADMIN v členskom prístupovom profile),
  *  - člen, ktorý má tento e-mail explicitne zadaný v členskom profile.
  * Inak sa e-mailové prihlásenie odmietne – člen použije prístupový kód.
  */
@@ -20,9 +20,9 @@ export async function checkEmailLoginAllowed(email: string): Promise<LoginCheckR
   }
 
   const supabase = await createClient();
-  const { data, error } = await supabase.rpc("is_email_login_allowed" as never, {
+  const { data, error } = await supabase.rpc("is_email_login_allowed", {
     p_email: normalized,
-  } as never);
+  });
 
   if (error) {
     console.error("[checkEmailLoginAllowed] RPC error:", error);
@@ -53,9 +53,9 @@ export async function resolveAccessCodeEmail(
   }
 
   const supabase = await createClient();
-  const { data, error } = await supabase.rpc("resolve_access_code" as never, {
+  const { data, error } = await supabase.rpc("resolve_access_code", {
     p_code: normalized,
-  } as never);
+  });
 
   if (error) {
     console.error("[resolveAccessCodeEmail] RPC error:", error);

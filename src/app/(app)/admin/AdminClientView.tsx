@@ -23,8 +23,8 @@ type MemberWithRoles = AdminMemberRow & {
 
 const AdminMemberManager = dynamic(
   () =>
-    import("@/features/admin/components/AdminMemberManager").then(
-      (module) => module.AdminMemberManager,
+    import("@/features/admin/components/MemberAccessEditor").then(
+      (module) => module.MemberAccessEditor,
     ),
   {
     loading: () => (

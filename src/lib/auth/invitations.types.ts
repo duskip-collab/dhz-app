@@ -20,7 +20,7 @@ export const INVITATION_STATUS_LABELS: Record<InvitationStatus, string> = {
   expired: "Expirovaná",
 };
 
-export const INVITATION_MAX_USES_LIMIT = 100;
+export const INVITATION_MAX_USES_LIMIT = 1;
 export const INVITATION_DEFAULT_MAX_USES = 1;
 export const INVITATION_DEFAULT_VALIDITY_DAYS = 14;
 
@@ -94,10 +94,10 @@ export interface CreateInvitationParams {
   validDays?: number;
   /** Voliteľný e-mail, pre ktorý je pozvánka určená. */
   targetEmail?: string | null;
-  /** Voliteľné viazanie na člena. */
-  memberId?: string | null;
+  /** Existing, active member whose account this invitation will claim. */
+  memberId: string;
   /** Max počet uplatnení (1 = jednorazový kód). */
-  maxUses?: number;
+  maxUses?: 1;
   /** Voliteľná poznámka administrátora. */
   notes?: string | null;
   /** Oprávnenia ktoré majú byť priradené po uplatnení kódu. */

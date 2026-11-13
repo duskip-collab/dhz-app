@@ -94,7 +94,7 @@ export async function uploadOrgDocument(input: {
     .replace(/[^a-z0-9._-]+/g, "-")
     .slice(-120);
   const year = new Date().getFullYear();
-  const path = `${year}/${Date.now()}-${safeName}`;
+  const path = `${input.category.toLowerCase()}/${year}/${Date.now()}-${safeName}`;
 
   const bytes = new Uint8Array(await input.file.arrayBuffer());
   const { error: upErr } = await supabase.storage.from(DOC_BUCKET).upload(path, bytes, {

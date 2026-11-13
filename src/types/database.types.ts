@@ -226,6 +226,7 @@ export interface Database {
           updated_at: string;
           created_by: string | null;
           updated_by: string | null;
+          onboarding_completed: boolean;
         },
         {
           id?: string;
@@ -252,6 +253,7 @@ export interface Database {
           updated_at?: string;
           created_by?: string | null;
           updated_by?: string | null;
+          onboarding_completed?: boolean;
         },
         {
           id?: string;
@@ -278,7 +280,115 @@ export interface Database {
           updated_at?: string;
           created_by?: string | null;
           updated_by?: string | null;
+          onboarding_completed?: boolean;
         }
+      >;
+      member_access_profiles: Table<
+        {
+          member_id: string;
+          role_id: string | null;
+          created_at: string;
+          updated_at: string;
+          changed_by: string | null;
+          status: string;
+        },
+        {
+          member_id: string;
+          role_id?: string | null;
+          created_at?: string;
+          updated_at?: string;
+          changed_by?: string | null;
+          status?: string;
+        },
+        {
+          member_id?: string;
+          role_id?: string | null;
+          created_at?: string;
+          updated_at?: string;
+          changed_by?: string | null;
+          status?: string;
+        },
+        [
+          Relationship<"member_access_profiles_member_id_fkey", "member_id", "members", "id">,
+          Relationship<"member_access_profiles_role_id_fkey", "role_id", "roles", "id">,
+        ]
+      >;
+      member_permission_grants: Table<
+        {
+          member_id: string;
+          permission_id: string;
+          granted_at: string;
+          granted_by: string | null;
+        },
+        {
+          member_id: string;
+          permission_id: string;
+          granted_at?: string;
+          granted_by?: string | null;
+        },
+        {
+          member_id?: string;
+          permission_id?: string;
+          granted_at?: string;
+          granted_by?: string | null;
+        },
+        [
+          Relationship<"member_permission_grants_member_id_fkey", "member_id", "members", "id">,
+          Relationship<"member_permission_grants_permission_id_fkey", "permission_id", "permissions", "id">,
+        ]
+      >;
+      member_permission_denials: Table<
+        {
+          member_id: string;
+          permission_id: string;
+          denied_at: string;
+          denied_by: string | null;
+        },
+        {
+          member_id: string;
+          permission_id: string;
+          denied_at?: string;
+          denied_by?: string | null;
+        },
+        {
+          member_id?: string;
+          permission_id?: string;
+          denied_at?: string;
+          denied_by?: string | null;
+        },
+        [
+          Relationship<"member_permission_denials_member_id_fkey", "member_id", "members", "id">,
+          Relationship<"member_permission_denials_permission_id_fkey", "permission_id", "permissions", "id">,
+        ]
+      >;
+      member_organizational_function_catalog: Table<
+        { code: string; name: string; created_at: string },
+        { code: string; name: string; created_at?: string },
+        { code?: string; name?: string; created_at?: string }
+      >;
+      member_organizational_functions: Table<
+        {
+          member_id: string;
+          function_code: string;
+          assigned_at: string;
+          assigned_by: string | null;
+        },
+        {
+          member_id: string;
+          function_code: string;
+          assigned_at?: string;
+          assigned_by?: string | null;
+        },
+        {
+          member_id?: string;
+          function_code?: string;
+          assigned_at?: string;
+          assigned_by?: string | null;
+        },
+        [
+          Relationship<"member_organizational_functions_member_id_fkey", "member_id", "members", "id">,
+          Relationship<"member_organizational_functions_function_code_fkey", "function_code", "member_organizational_function_catalog", "code">,
+        ]
       >;
       member_guardians: Table<
         {
@@ -1140,6 +1250,39 @@ export interface Database {
         Args: { p_user_id: string; p_permission_code: string };
         Returns: boolean;
       };
+      current_member_id: {
+        Args: Record<PropertyKey, never>;
+        Returns: string | null;
+      };
+      member_has_permission: {
+        Args: { p_member_id: string; p_permission_code: string };
+        Returns: boolean;
+      };
+      member_has_role: {
+        Args: { p_member_id: string; p_role_code: string };
+        Returns: boolean;
+      };
+      set_member_access_member: {
+        Args: {
+          p_member_id: string;
+          p_role_code: string;
+          p_grant_permissions?: string[];
+          p_deny_permissions?: string[];
+        };
+        Returns: Json;
+      };
+      set_member_access_code: {
+        Args: { p_user_id: string; p_code: string };
+        Returns: string;
+      };
+      is_email_login_allowed: {
+        Args: { p_email: string };
+        Returns: boolean;
+      };
+      resolve_access_code: {
+        Args: { p_code: string };
+        Returns: string | null;
+      };
       create_invitation: {
         // 20261111_invitation_codes.sql: (role_code, code_hash, expires_at, ...)
         Args: {
@@ -1147,9 +1290,10 @@ export interface Database {
           p_code_hash: string;
           p_expires_at: string;
           p_target_email?: string | null;
-          p_member_id?: string | null;
-          p_max_uses?: number;
+          p_member_id: string;
+          p_max_uses?: 1;
           p_notes?: string | null;
+          p_permission_codes?: string[];
         };
         Returns: string;
       };
@@ -1198,6 +1342,10 @@ export interface Database {
       has_role: {
         // Skutočná signatúra v DB (20261006:305): (p_user_id uuid, p_role_code text)
         Args: { p_user_id: string; p_role_code: string };
+        Returns: boolean;
+      };
+      has_any_role: {
+        Args: { p_user_id: string; p_role_codes: string[] };
         Returns: boolean;
       };
       set_updated_at: {

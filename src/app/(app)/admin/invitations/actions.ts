@@ -15,9 +15,8 @@ import {
 } from "@/lib/auth/invitations.service";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { requirePermission } from "@/lib/auth/server";
-import { isAppRole, type AppRole } from "@/lib/auth/roles";
+import { isAppRole } from "@/lib/auth/roles";
 import {
-  INVITATION_MAX_USES_LIMIT,
   type Invitation,
 } from "@/lib/auth/invitations.types";
 
@@ -45,7 +44,7 @@ function statusMessage(e: unknown, fallback: string): string {
 /**
  * createInvitationAction – vytvorí novú pozvánku.
  *
- * FormData: role, valid_days, max_uses, target_email, notes
+ * FormData: role, member_id, valid_days, target_email, notes
  */
 export async function createInvitationAction(
   _prev: InvitationActionState | null,
@@ -57,20 +56,15 @@ export async function createInvitationAction(
   if (!isAppRole(role)) {
     return fail("Vyberte platnú rolu.");
   }
+  const memberId = String(formData.get("member_id") ?? "").trim();
+  if (!memberId) {
+    return fail("Vyberte člena, pre ktorého sa pozvánka vytvára.");
+  }
 
   const validDaysRaw = String(formData.get("valid_days") ?? "").trim();
   const validDays = validDaysRaw ? Number.parseInt(validDaysRaw, 10) : undefined;
   if (validDaysRaw && (!Number.isFinite(validDays) || validDays! < 1 || validDays! > 365)) {
     return fail("Neplatná platnosť kódu (1 – 365 dní).");
-  }
-
-  const maxUsesRaw = String(formData.get("max_uses") ?? "").trim();
-  const maxUses = maxUsesRaw ? Number.parseInt(maxUsesRaw, 10) : undefined;
-  if (
-    maxUsesRaw &&
-    (!Number.isFinite(maxUses) || maxUses! < 1 || maxUses! > INVITATION_MAX_USES_LIMIT)
-  ) {
-    return fail(`Neplatný počet použití kódu (1 – ${INVITATION_MAX_USES_LIMIT}).`);
   }
 
   const targetEmailRaw = String(formData.get("target_email") ?? "").trim();
@@ -84,9 +78,9 @@ export async function createInvitationAction(
 
   try {
     const created = await createInvitation({
-      role: role as AppRole,
+      role,
+      memberId,
       validDays,
-      maxUses,
       targetEmail: targetEmailRaw ? targetEmailRaw : null,
       notes: notesRaw ? notesRaw : null,
       permissions: permissions.length > 0 ? permissions : undefined,
