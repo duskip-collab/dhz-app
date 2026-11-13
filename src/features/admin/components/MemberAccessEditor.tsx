@@ -4,27 +4,24 @@ import {
   useCallback,
   useMemo,
   useState,
-  useActionState,
   useEffect,
 } from "react";
 import {
-  ChevronRight,
   KeyRound,
   Loader2,
   RefreshCw,
-  ShieldAlert,
   User,
 } from "lucide-react";
 import {
   loadMemberAccessDetailAction,
   saveMemberAccessAction,
   generateActivationCodeAction,
+  generateMemberAccessCodeForMemberAction,
   revokeActivationCodeAction,
   listActivationCodesForMemberAction,
 } from "@/app/(app)/admin/actions";
 import type { AdminMemberRow } from "@/lib/admin/admin.service";
-import { APP_ROLES, ROLE_LABELS, type AppRole, isAppRole } from "@/lib/auth/roles";
-import { PERMISSIONS } from "@/lib/auth/permissions";
+import { APP_ROLES, ROLE_LABELS, type AppRole } from "@/lib/auth/roles";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
@@ -37,6 +34,9 @@ interface PermissionEntry {
   name: string;
   description: string;
   source: PermissionSource;
+  inherited: boolean;
+  granted: boolean;
+  denied: boolean;
 }
 
 interface ActivationCodeRow {
@@ -54,6 +54,32 @@ interface MemberAccessData {
   role: AppRole | null;
   permissions: PermissionEntry[];
   activationCodes: ActivationCodeRow[];
+}
+
+interface AccessSnapshot {
+  role: AppRole | null;
+  grants: string[];
+  denials: string[];
+}
+
+function createActionFormData(fields: Record<string, string>): FormData {
+  const formData = new FormData();
+  for (const [name, value] of Object.entries(fields)) {
+    formData.set(name, value);
+  }
+  return formData;
+}
+
+function getAccessSnapshot(detail: MemberAccessData): AccessSnapshot {
+  return {
+    role: detail.role,
+    grants: detail.permissions.filter((permission) => permission.granted).map((permission) => permission.code).sort(),
+    denials: detail.permissions.filter((permission) => permission.denied).map((permission) => permission.code).sort(),
+  };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 const MODULES: Array<{
@@ -144,97 +170,80 @@ export function MemberAccessEditor({
   onClose: () => void;
 }) {
   const [detail, setDetail] = useState<MemberAccessData | null>(null);
-  const [detailPending, setDetailPending] = useState(false);
+  const [baseline, setBaseline] = useState<AccessSnapshot | null>(null);
+  const [detailPending, setDetailPending] = useState(true);
+  const [detailError, setDetailError] = useState<string | null>(null);
   const [savePending, setSavePending] = useState(false);
   const [codePending, setCodePending] = useState(false);
   const [revokePending, setRevokePending] = useState(false);
-  const [showRawCode, setShowRawCode] = useState<string | null>(null);
-  const [generatedCode, setGeneratedCode] = useState<{ code: string; expiresAt: string } | null>(null);
+  const [generatedCode, setGeneratedCode] = useState<{
+    code: string;
+    expiresAt: string | null;
+    kind: "invitation" | "login";
+  } | null>(null);
+  const [codeError, setCodeError] = useState<string | null>(null);
   const [saveMessage, setSaveMessage] = useState<{ kind: "success" | "error"; text: string } | null>(null);
 
-  const [detailState, detailAction] = useActionState(loadMemberAccessDetailAction, null);
-  const [saveState, saveAction] = useActionState(saveMemberAccessAction, null);
-  const [codeState, codeAction] = useActionState(generateActivationCodeAction, null);
-  const [revokeState, revokeAction] = useActionState(revokeActivationCodeAction, null);
-  const [codesState, codesAction] = useActionState(listActivationCodesForMemberAction, null);
-
   useEffect(() => {
-    void detailAction(Object.assign(new FormData(), { member_id: member.member_id }));
-  }, [member.member_id, detailAction]);
-
-  useEffect(() => {
-    if (detailState?.ok && detailState.data) {
-      setDetail(detailState.data as MemberAccessData);
+    let active = true;
+    void (async () => {
+      const result = await loadMemberAccessDetailAction(
+        null,
+        createActionFormData({ member_id: member.member_id }),
+      );
+      if (!active) return;
+      if (result.ok && result.data) {
+        const loadedDetail = result.data as MemberAccessData;
+        setDetail(loadedDetail);
+        setBaseline(getAccessSnapshot(loadedDetail));
+      } else {
+        setDetailError(result.message ?? "Prístupy člena sa nepodarilo načítať.");
+      }
       setDetailPending(false);
-    } else if (detailState?.ok === false) {
-      setDetailPending(false);
-    }
-  }, [detailState]);
-
-  useEffect(() => {
-    if (saveState?.ok) {
-      setSavePending(false);
-      setSaveMessage({ kind: "success", text: saveState.message ?? "Prístupy uložené." });
-      setTimeout(() => setSaveMessage(null), 4000);
-    } else if (saveState?.ok === false) {
-      setSavePending(false);
-      setSaveMessage({ kind: "error", text: saveState.message ?? "Uloženie zlyhalo." });
-    }
-  }, [saveState]);
-
-  useEffect(() => {
-    if (codeState?.ok && codeState.data) {
-      setCodePending(false);
-      setGeneratedCode({
-        code: (codeState.data as { code?: string }).code ?? "",
-        expiresAt: (codeState.data as { expiresAt?: string }).expiresAt ?? "",
-      });
-      setShowRawCode((codeState.data as { code?: string }).code ?? null);
-    } else if (codeState?.ok === false) {
-      setCodePending(false);
-    }
-  }, [codeState]);
-
-  useEffect(() => {
-    if (codesState?.ok && codesState.data) {
-      const d = detail;
-      if (d) setDetail({ ...d, activationCodes: codesState.data as ActivationCodeRow[] });
-    }
-  }, [codesState, detail]);
-
-  const current = useMemo(() => {
-    if (!detail) return null;
-    return { role: detail.role };
-  }, [detail]);
+    })();
+    return () => {
+      active = false;
+    };
+  }, [member.member_id]);
 
   const changed = useMemo(() => {
-    if (!detail) return { added: [] as string[], removed: [] as string[] };
+    if (!detail || !baseline) {
+      return {
+        added: [] as string[],
+        removed: [] as string[],
+        denied: [] as string[],
+        restored: [] as string[],
+      };
+    }
+    const snapshot = getAccessSnapshot(detail);
     return {
-      added: detail.permissions.filter((p) => p.source === "granted").map((p) => p.code),
-      removed: detail.permissions.filter((p) => p.source === "denied").map((p) => p.code),
+      added: snapshot.grants.filter((code) => !baseline.grants.includes(code)),
+      removed: baseline.grants.filter((code) => !snapshot.grants.includes(code)),
+      denied: snapshot.denials.filter((code) => !baseline.denials.includes(code)),
+      restored: baseline.denials.filter((code) => !snapshot.denials.includes(code)),
     };
-  }, [detail]);
+  }, [baseline, detail]);
 
   const handleToggle = useCallback((code: string) => {
     setDetail((d) => {
       if (!d) return null;
       const entry = d.permissions.find((p) => p.code === code);
       if (!entry) return d;
-      const next: PermissionEntry = { ...entry };
-      switch (entry.source) {
-        case "none":
-          next.source = "granted";
-          break;
-        case "granted":
-          next.source = "denied";
-          break;
-        case "denied":
-          next.source = "none";
-          break;
-        case "inherited":
-          next.source = "granted";
-          break;
+      const next = { ...entry };
+      const enabled = (entry.inherited || entry.granted) && !entry.denied;
+      if (enabled) {
+        next.denied = true;
+      } else {
+        next.denied = false;
+        if (!next.inherited && !next.granted) next.granted = true;
       }
+      next.source = next.denied
+        ? "denied"
+        : next.granted
+          ? "granted"
+          : next.inherited
+            ? "inherited"
+            : "none";
       return { ...d, permissions: d.permissions.map((p) => (p.code === code ? next : p)) };
     });
   }, []);
@@ -248,7 +257,9 @@ export function MemberAccessEditor({
         ...d,
         permissions: d.permissions.map((p) => ({
           ...p,
-          source: p.source === "inherited" ? "inherited" : "none",
+          granted: false,
+          denied: false,
+          source: p.inherited ? "inherited" : "none",
         })),
       };
     });
@@ -257,45 +268,131 @@ export function MemberAccessEditor({
   const handleSave = useCallback(async () => {
     if (!detail) return;
     setSavePending(true);
-    const grantPermissions = detail.permissions.filter((p) => p.source === "granted").map((p) => p.code);
-    const denyPermissions = detail.permissions.filter((p) => p.source === "denied").map((p) => p.code);
+    const grantPermissions = detail.permissions.filter((p) => p.granted).map((p) => p.code);
+    const denyPermissions = detail.permissions.filter((p) => p.denied).map((p) => p.code);
     const roleCode = (detail.role ?? APP_ROLES.CLEN) as AppRole;
-    await saveAction(Object.assign(new FormData(), {
+    const result = await saveMemberAccessAction(null, createActionFormData({
       member_id: detail.member.member_id,
       role_code: roleCode,
       grant_permissions: JSON.stringify(grantPermissions),
       deny_permissions: JSON.stringify(denyPermissions),
     }));
-  }, [detail, saveAction]);
+    setSavePending(false);
+    if (!result.ok) {
+      setSaveMessage({ kind: "error", text: result.message ?? "Uloženie zlyhalo." });
+      return;
+    }
+
+    setSaveMessage({ kind: "success", text: result.message ?? "Prístupy uložené." });
+    const refreshed = await loadMemberAccessDetailAction(
+      null,
+      createActionFormData({ member_id: detail.member.member_id }),
+    );
+    if (refreshed.ok && refreshed.data) {
+      const loadedDetail = refreshed.data as MemberAccessData;
+      setDetail(loadedDetail);
+      setBaseline(getAccessSnapshot(loadedDetail));
+    } else {
+      setSaveMessage({
+        kind: "error",
+        text: "Prístupy sa uložili, ale ich aktuálny stav sa nepodarilo obnoviť.",
+      });
+    }
+  }, [detail]);
 
   const handleGenerateCode = useCallback(async () => {
     if (!detail) return;
     setCodePending(true);
-    await codeAction(Object.assign(new FormData(), {
+    setGeneratedCode(null);
+    setCodeError(null);
+    const formData = createActionFormData({
       member_id: detail.member.member_id,
       role_code: (detail.role ?? APP_ROLES.CLEN) as AppRole,
-      permissions: JSON.stringify(detail.permissions.filter((p) => p.source === "granted").map((p) => p.code)),
-      validity_days: "14",
-      max_uses: "1",
-    }));
-  }, [detail, codeAction]);
+    });
+    if (detail.member.has_account) {
+      const result = await generateMemberAccessCodeForMemberAction(null, formData);
+      setCodePending(false);
+      if (!result.ok) {
+        setCodeError(result.message);
+        return;
+      }
+      if (!isRecord(result.data) || typeof result.data.code !== "string") {
+        setCodeError("Kód bol vytvorený, ale nepodarilo sa ho načítať.");
+        return;
+      }
+      setGeneratedCode({ code: result.data.code, expiresAt: null, kind: "login" });
+    } else {
+      formData.set("permissions", JSON.stringify(detail.permissions.filter((p) => p.granted).map((p) => p.code)));
+      formData.set("validity_days", "14");
+      formData.set("max_uses", "1");
+      const result = await generateActivationCodeAction(null, formData);
+      setCodePending(false);
+      if (!result.ok) {
+        setCodeError(result.message);
+        return;
+      }
+      if (!isRecord(result.data) || typeof result.data.code !== "string") {
+        setCodeError("Kód bol vytvorený, ale nepodarilo sa ho načítať.");
+        return;
+      }
+      setGeneratedCode({
+        code: result.data.code,
+        expiresAt: typeof result.data.expiresAt === "string" ? result.data.expiresAt : null,
+        kind: "invitation",
+      });
+      const refreshedCodes = await listActivationCodesForMemberAction(
+        null,
+        createActionFormData({ member_id: detail.member.member_id }),
+      );
+      if (refreshedCodes.ok && refreshedCodes.data) {
+        setDetail((current) => current
+          ? { ...current, activationCodes: refreshedCodes.data as ActivationCodeRow[] }
+          : current);
+      } else {
+        setCodeError("Kód bol vytvorený, ale zoznam pozvánok sa nepodarilo obnoviť.");
+      }
+    }
+  }, [detail]);
 
   const handleRevokeCode = useCallback(async () => {
     if (!detail) return;
     if (!window.confirm("Zrušiť aktívny aktivačný kód tohto člena?")) return;
     setRevokePending(true);
-    await revokeAction(Object.assign(new FormData(), { member_id: detail.member.member_id }));
+    const result = await revokeActivationCodeAction(
+      null,
+      createActionFormData({ member_id: detail.member.member_id }),
+    );
     setRevokePending(false);
-    void codesAction(Object.assign(new FormData(), { member_id: detail.member.member_id }));
-  }, [detail, revokeAction, codesAction]);
+    if (!result.ok) {
+      setCodeError(result.message);
+      return;
+    }
+    const refreshed = await listActivationCodesForMemberAction(
+      null,
+      createActionFormData({ member_id: detail.member.member_id }),
+    );
+    if (refreshed.ok && refreshed.data) {
+      setDetail({ ...detail, activationCodes: refreshed.data as ActivationCodeRow[] });
+    } else if (!refreshed.ok) {
+      setCodeError(refreshed.message);
+    }
+  }, [detail]);
 
 
   const hasChanges = useMemo(() => {
-    if (!detail) return false;
-    return (detail.role !== (current?.role ?? null)) || changed.added.length > 0 || changed.removed.length > 0;
-  }, [detail, current, changed]);
+    if (!detail || !baseline) return false;
+    const snapshot = getAccessSnapshot(detail);
+    return (
+      snapshot.role !== baseline.role ||
+      snapshot.grants.join(",") !== baseline.grants.join(",") ||
+      snapshot.denials.join(",") !== baseline.denials.join(",")
+    );
+  }, [baseline, detail]);
 
   const hasAccount = detail?.member.has_account ?? false;
+  const hasActiveInvitation = detail?.activationCodes.some(
+    (code) => code.status === "active",
+  ) ?? false;
 
   const memberPhoto = (
     <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#C62828]/10 text-[#C62828]">
@@ -326,8 +423,12 @@ export function MemberAccessEditor({
               {detail?.member.email ?? "—"}
             </p>
             <div className="mt-2 flex items-center gap-2">
-              <Badge tone={hasAccount ? "green" : "gray"}>
-                {hasAccount ? "Aktívny účet" : "Bez účtu"}
+              <Badge tone={hasAccount ? "green" : hasActiveInvitation ? "blue" : "gray"}>
+                {hasAccount
+                  ? "Aktívny účet"
+                  : hasActiveInvitation
+                    ? "Pozvánka čaká na registráciu"
+                    : "Bez účtu"}
               </Badge>
               {detail?.member.auth_user_id && (
                 <span className="text-xs text-gray-400">auth.id: {detail.member.auth_user_id.slice(0, 8)}…</span>
@@ -336,11 +437,20 @@ export function MemberAccessEditor({
           </div>
         </div>
 
+        {!detail ? (
+          detailPending ? (
+            <LoadingState label="Načítavam prístupy člena…" />
+          ) : (
+            <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-[#C62828]">
+              {detailError ?? "Prístupy člena sa nepodarilo načítať."}
+            </p>
+          )
+        ) : (
+        <div className="space-y-4">
         <Card title="Aktuálna rola" subtitle="Vyberte rolu člena.">
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             {ROLE_OPTIONS.map((opt) => {
               const selected = detail?.role === opt.value;
-              const isAdmin = isAdminRole(opt.value);
               return (
                 <button
                   key={opt.value}
@@ -348,7 +458,7 @@ export function MemberAccessEditor({
                   onClick={() =>
                     setDetail((d) => (d ? { ...d, role: opt.value } : null))
                   }
-                  disabled={isAdmin && !detail?.member.auth_user_id}
+                  disabled={savePending}
                   className={`min-h-[44px] rounded-lg border px-3 py-2 text-sm font-medium transition ${
                     selected
                       ? "bg-[#C62828] border-[#C62828] text-white"
@@ -377,7 +487,7 @@ export function MemberAccessEditor({
           >
             <ul className="text-sm text-gray-700 space-y-1">
               <li>
-                Rola: <span className="font-semibold">{ROLE_LABELS[detail!.role!]}</span>
+                Rola: <span className="font-semibold">{ROLE_LABELS[detail.role ?? APP_ROLES.CLEN]}</span>
               </li>
               {changed.added.length > 0 && (
                 <li className="flex items-center gap-1">
@@ -389,6 +499,18 @@ export function MemberAccessEditor({
                 <li className="flex items-center gap-1">
                   <span className="text-[#C62828]">−</span>{" "}
                   Odobrané: {changed.removed.join(", ")}
+                </li>
+              )}
+              {changed.denied.length > 0 && (
+                <li className="flex items-center gap-1">
+                  <span className="text-[#C62828]">−</span>{" "}
+                  Zablokované: {changed.denied.join(", ")}
+                </li>
+              )}
+              {changed.restored.length > 0 && (
+                <li className="flex items-center gap-1">
+                  <span className="text-green-600">+</span>{" "}
+                  Obnovené: {changed.restored.join(", ")}
                 </li>
               )}
             </ul>
@@ -404,7 +526,8 @@ export function MemberAccessEditor({
             onClick={handleGenerateCode}
             disabled={savePending || codePending || !detail}
           >
-            <KeyRound className="h-4 w-4 mr-2" /> Generovať aktivačný kód
+            <KeyRound className="h-4 w-4 mr-2" />
+            {hasAccount ? "Generovať prihlasovací kód" : "Generovať aktivačný kód"}
           </Button>
           <Button
             variant={hasChanges ? "primary" : "secondary"}
@@ -425,6 +548,33 @@ export function MemberAccessEditor({
             {saveMessage.text}
           </div>
         )}
+        {generatedCode && (
+          <Card
+            title={generatedCode.kind === "invitation" ? "Registračný kód" : "Prihlasovací kód"}
+            subtitle="Tento kód sa z bezpečnostných dôvodov zobrazí iba počas tohto okna."
+          >
+            <input
+              type="text"
+              value={generatedCode.code}
+              readOnly
+              onFocus={(event) => event.currentTarget.select()}
+              className="w-full min-h-[44px] rounded-lg border border-gray-300 bg-gray-50 px-3 text-center font-mono text-sm text-[#C62828]"
+              aria-label="Vygenerovaný prístupový kód"
+            />
+            <p className="mt-2 text-xs text-gray-500">
+              {generatedCode.kind === "invitation"
+                ? generatedCode.expiresAt
+                  ? `Jednorazový kód platí do ${new Date(generatedCode.expiresAt).toLocaleString("sk-SK")}. Po registrácii sa účet priradí k tomuto členovi.`
+                  : "Jednorazový registračný kód. Po registrácii sa účet priradí k tomuto členovi."
+                : "Prihlasovací kód slúži ako heslo účtu. Nový kód nahradí predchádzajúci."}
+            </p>
+          </Card>
+        )}
+        {codeError && (
+          <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-[#C62828]">
+            {codeError}
+          </p>
+        )}
         <Card
           title="Oprávnenia podľa modulov"
           subtitle="Modré = z roly, zelené = individuálne pridané, červené = individuálne odobrané."
@@ -440,13 +590,14 @@ export function MemberAccessEditor({
                     const entry = detail?.permissions.find((p) => p.code === perm.code);
                     const source = entry?.source ?? "none";
                     const info = SOURCE_LABELS[source];
-                    const effective = source === "granted" || source === "inherited";
+                    const effective = Boolean(entry && (entry.inherited || entry.granted) && !entry.denied);
                     return (
                       <button
                         key={perm.code}
                         type="button"
                         onClick={() => handleToggle(perm.code)}
-                        className="w-full flex items-center justify-between px-3 py-2.5 text-sm transition hover:bg-gray-25"
+                        disabled={savePending}
+                        className="w-full flex items-center justify-between px-3 py-2.5 text-sm transition hover:bg-gray-25 disabled:opacity-60"
                       >
                         <div className="flex items-center gap-3 min-w-0">
                           <input
@@ -539,6 +690,8 @@ export function MemberAccessEditor({
             Zavrieť
           </Button>
         </div>
+        </div>
+        )}
       </div>
     </div>
   );

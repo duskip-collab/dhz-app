@@ -547,6 +547,9 @@ export interface MemberPermissionEntry {
   code: Permission;
   name: string;
   source: "inherited" | "granted" | "denied" | "none";
+  inherited: boolean;
+  granted: boolean;
+  denied: boolean;
 }
 
 export interface MemberAccessDetail {
@@ -690,6 +693,9 @@ export async function loadMemberAccessDetail(
         code,
         name: PERMISSION_LABELS[code] ?? code,
         source,
+        inherited,
+        granted,
+        denied,
       };
     },
   );
