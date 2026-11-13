@@ -72,22 +72,22 @@ export function AppShell({
 
   return (
     <AuthProvider roles={roles} permissions={permissions}>
-      <div className="min-h-screen bg-[#F5F6F8] flex">
+      <div className="min-h-screen bg-[var(--bg)] flex overflow-hidden">
         <Sidebar
           permissions={permissions}
           userName={userName}
           userEmail={userEmail}
           onLogout={handleLogout}
         />
-        <div className="flex-1 min-w-0 flex flex-col min-h-screen">
+        <div className="flex-1 min-w-0 flex flex-col min-h-screen bg-[var(--surface)]">
           <TopBar userName={userName} userEmail={userEmail} permissions={permissions} />
           <DesktopTopBar userName={userName} userEmail={userEmail} />
-          <main className="flex-1 w-full max-w-6xl mx-auto px-4 sm:px-6 py-6 pb-24 lg:pb-10">
+          <main className="flex-1 w-full max-w-6xl mx-auto px-4 sm:px-6 py-6 pb-24 lg:pb-10 bg-[var(--background)]">
             {children}
           </main>
-          <footer className="hidden lg:block border-t border-gray-200 bg-white">
+          <footer className="hidden lg:block border-t border-border bg-white">
             <div className="max-w-6xl mx-auto px-6 py-4">
-              <p className="text-xs text-gray-400 text-center">
+              <p className="text-xs text-text-secondary text-center">
                 © 2026 DHZ Digital OS · Digitálny organizačný systém dobrovoľného hasičského zboru
               </p>
             </div>
