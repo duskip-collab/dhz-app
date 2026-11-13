@@ -1,3 +1,35 @@
+/** K17.5 – Serverová služba pre správu pozývacích kódov.
+ *
+ * BEZPEČNOSTNÉ ZÁSADY:
+ *  - Raw pozývací kód sa v DB ukladá IBA ako SHA-256 hash (`code_hash`).
+ *  - Raw kód sa vracia IBA raz – z `createInvitation()`.
+ *  - Kód sa NIKDY nevykresľuje do logov, auditu, URL ani localStorage.
+ *  - Rola sa odosiela ako KÓD (whitelist), nie ako role_id.
+ *  - Jednorazovosť a expiráciu vynucuje DB (RPC claim_invitation_code).
+ *  - `admin.users` je jediný zdroj pravdy pre oprávnenie (zhoda s RLS).
+ */
+
+import { createClient } from "@/lib/supabase/server";
+import { requirePermission } from "@/lib/auth/server";
+import { PERMISSIONS } from "@/lib/auth/permissions";
+import { isAppRole, type AppRole } from "@/lib/auth/roles";
+import { createAuthError } from "@/lib/members/members.errors";
+import {
+  generateInvitationCode,
+  hashInvitationCode,
+} from "./invitations.share";
+import {
+  INVITATION_DEFAULT_MAX_USES,
+  INVITATION_DEFAULT_VALIDITY_DAYS,
+  INVITATION_MAX_USES_LIMIT,
+  type CreateInvitationParams,
+  type CreatedInvitation,
+  type Invitation,
+  type InvitationClaimResult,
+  type InvitationStatus,
+  type InvitationVerification,
+} from "./invitations.types";
+
 /** Assign permissions from invitation to user */
 async function assignPermissionsFromInvitation(invitationId: string, userId: string): Promise<void> {
   const supabase = await createClient();
@@ -39,37 +71,6 @@ async function assignPermissionsFromInvitation(invitationId: string, userId: str
     console.error("[assignPermissionsFromInvitation] Error assigning permissions to user:", insertError.message);
   }
 }
-
-/** K17.5 – Serverová služba pre správu pozývacích kódov.
-//
-// BEZPEČNOSTNÉ ZÁSADY:
-//  - Raw pozývací kód sa v DB ukladá IBA ako SHA-256 hash (`code_hash`).
-//  - Raw kód sa vracia IBA raz – z `createInvitation()`.
-//  - Kód sa NIKDY nevykresľuje do logov, auditu, URL ani localStorage.
-//  - Rola sa odosiela ako KÓD (whitelist), nie ako role_id.
-//  - Jednorazovosť a expiráciu vynucuje DB (RPC claim_invitation_code).
-//  - `admin.users` je jediný zdroj pravdy pre oprávnenie (zhoda s RLS).
-
-import { createClient } from "@/lib/supabase/server";
-import { requirePermission } from "@/lib/auth/server";
-import { PERMISSIONS } from "@/lib/auth/permissions";
-import { isAppRole, type AppRole } from "@/lib/auth/roles";
-import { createAuthError } from "@/lib/members/members.errors";
-import {
-  generateInvitationCode,
-  hashInvitationCode,
-} from "./invitations.share";
-import {
-  INVITATION_DEFAULT_MAX_USES,
-  INVITATION_DEFAULT_VALIDITY_DAYS,
-  INVITATION_MAX_USES_LIMIT,
-  type CreateInvitationParams,
-  type CreatedInvitation,
-  type Invitation,
-  type InvitationClaimResult,
-  type InvitationStatus,
-  type InvitationVerification,
-} from "./invitations.types";
 
 // =============================================================================
 // VALIDÁCIA
@@ -284,6 +285,7 @@ export async function getInvitationById(id: string): Promise<Invitation | null> 
   return toInvitation(data as Parameters<typeof toInvitation>[0]);
 }
 
+
 // =============================================================================
 // ZRUŠENIE
 // =============================================================================
@@ -422,45 +424,5 @@ export async function claimInvitationCode(code: string): Promise<InvitationClaim
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
-/** Assign permissions from invitation to user */
-async function assignPermissionsFromInvitation(invitationId: string, userId: string): Promise<void> {
-  const supabase = await createClient();
-
-  // Get permissions associated with this invitation
-  const { data: permRows, error: permError } = await supabase
-    .from("invitation_permissions")
-    .select("permission_id")
-    .eq("invitation_id", invitationId);
-
-  if (permError) {
-    console.error("[assignPermissionsFromInvitation] Error fetching invitation permissions:", permError.message);
-    return;
-  }
-
-  if (!permRows || permRows.length === 0) {
-    return;
-  }
-
-  // Extract permission IDs and assign to user
-  const permissionIds = permRows.map((row) => row.permission_id).filter(
-    (id): id is string => id !== null && id !== undefined,
-  );
-
-  if (permissionIds.length === 0) {
-    return;
-  }
-
-  // Insert into user_permissions
-  const { error: insertError } = await supabase.from("user_permissions").insert(
-    permissionIds.map((permissionId) => ({
-      user_id: userId,
-      permission_id: permissionId,
-      granted_by: userId,
-    })),
-  );
-
-  if (insertError) {
-    console.error("[assignPermissionsFromInvitation] Error assigning permissions to user:", insertError.message);
-  }
 }
-}
+
