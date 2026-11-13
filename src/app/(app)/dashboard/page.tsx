@@ -90,24 +90,55 @@ function AlertCard({ item }: { item: AlertItem }) {
 }
 
 interface EventItem {
+  id: string;
+  source: string;
   title: string;
   type: string;
   date: string;
   href: string;
 }
 
+function getEventDetailHref(source: string, id: string): string {
+  const rawId = id.split(":")[1] ?? id;
+  switch (source) {
+    case "competition":
+      return `/competitions/${rawId}`;
+    case "training":
+      return `/training/${rawId}`;
+    case "calendar":
+    case "work_party":
+    case "inspection":
+    case "fault":
+    case "course":
+    default:
+      return "/calendar";
+  }
+}
+
 function UpcomingEvent({ event }: { event: EventItem }) {
+  const canViewDetail =
+    event.source === "competition" ||
+    event.source === "training" ||
+    event.source === "calendar";
+
   return (
-    <div className="flex items-center justify-between gap-3 p-3 rounded-lg border border-gray-200 bg-white">
+    <div
+      className={`flex items-center justify-between gap-3 p-3 rounded-lg border border-gray-200 bg-white hover:shadow-md hover:border-gray-300 transition ${
+        canViewDetail ? "cursor-pointer" : ""
+      }`}
+      onClick={canViewDetail ? () => (window.location.href = event.href) : undefined}
+    >
       <div className="flex-1 min-w-0">
         <p className="text-sm font-semibold text-gray-900 truncate">{event.title}</p>
         <p className="text-xs text-gray-600 truncate">{event.type}</p>
       </div>
       <div className="text-right">
         <p className="text-sm font-semibold text-gray-900">{new Date(event.date).toLocaleDateString("sk-SK")}</p>
-        <a href={event.href} className="text-xs text-[#C62828] hover:underline">
-          Detail →
-        </a>
+        {canViewDetail ? (
+          <a href={event.href} className="text-xs text-[#C62828] hover:underline ml-2">
+            Detail →
+          </a>
+        ) : null}
       </div>
     </div>
   );
@@ -273,12 +304,18 @@ export default async function DashboardPage() {
   const upcoming: EventItem[] = calendarEvents
     .filter((event) => new Date(event.start_at) >= startOfToday)
     .slice(0, 6)
-    .map((event) => ({
-      title: event.title,
-      type: EVENT_TYPE_LABELS[event.type] ?? "Iné",
-      date: event.start_at,
-      href: "/calendar",
-    }));
+    .map((event) => {
+      const source = event.source ?? "calendar";
+      const id = event.id ?? "";
+      return {
+        id,
+        source,
+        title: event.title,
+        type: EVENT_TYPE_LABELS[event.type] ?? "Iné",
+        date: event.start_at,
+        href: getEventDetailHref(source, id),
+      };
+    });
 
   return (
     <div className="space-y-6">
@@ -297,13 +334,14 @@ export default async function DashboardPage() {
           label="Výjazdy"
           value={stats.incidents}
           sub={`Za tento rok: ${stats.incidentsYear} · Za mesiac: ${stats.incidentsMonth}`}
+          href={canViewIncidents ? "/incidents" : undefined}
         />
         <KpiCard
           icon={<Users className="h-4 w-4" />}
           label="Členovia aktívni / celkom"
           value={`${stats.membersActive} / ${stats.membersTotal}`}
           sub={canViewMembers ? "Aktívne členstvo" : "Bez prístupu k členským dátam"}
-          href="/members"
+          href={canViewMembers ? "/members" : undefined}
         />
         <KpiCard
           icon={<CreditCard className="h-4 w-4" />}
@@ -311,6 +349,7 @@ export default async function DashboardPage() {
           value={`${stats.financeBalance.toFixed(2)} €`}
           sub={canSeeFinance ? "Finančné účty zboru" : "Požiadajte o finance.view"}
           tone={stats.financeBalance < 0 ? "error" : "default"}
+          href={canSeeFinance ? "/finance" : undefined}
         />
         <KpiCard
           icon={<Clock className="h-4 w-4" />}
@@ -318,6 +357,7 @@ export default async function DashboardPage() {
           value={alerts.filter((a) => a.type === "expiry").length > 0 ? "POZOR" : "V poriadku"}
           sub="STK / EK / kurzy do 30 dní"
           tone={alerts.filter((a) => a.type === "expiry").length > 0 ? "warn" : "default"}
+          href={canViewInspections || expiringCourses.length > 0 ? "/courses" : undefined}
         />
       </div>
 

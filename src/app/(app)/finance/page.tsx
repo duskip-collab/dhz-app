@@ -15,7 +15,11 @@ import {
   MembershipDuesSection,
   type DuesRow,
 } from "@/features/finance/components/MembershipDuesSection";
+import { APP_ROLES } from "@/lib/auth/roles";
+import { ResetFinanceSection } from "@/features/finance/components/ResetFinanceSection";
 import { formatMinor } from "@/lib/finance/finance-core";
+
+
 
 const MEMBERSHIP_TYPE_LABELS: Record<string, string> = {
   adult: "Dospelý",
@@ -165,12 +169,16 @@ export default async function FinancePage() {
   const currentYear = new Date().getFullYear();
   const totalCash = balances.reduce((s, b) => s + b.currentBalanceMinor, 0);
 
+  const isAdmin = ctx.roles.includes(APP_ROLES.ADMIN) || ctx.role === APP_ROLES.ADMIN;
+
   return (
     <div className="space-y-8">
       <div className="flex items-center gap-3">
         <Landmark className="h-6 w-6 text-[#C62828]" />
         <h1 className="text-2xl font-bold text-gray-900">Financie</h1>
       </div>
+      {isAdmin && <ResetFinanceSection />}
+
 
       {/* ---- 1/4. FINANČNÝ PREHĽAD (skutočné DB údaje) ---- */}
       {report ? (

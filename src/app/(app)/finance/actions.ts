@@ -16,13 +16,15 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { requirePermission } from "@/lib/auth/server";
+import { requirePermission, getAuthContext } from "@/lib/auth/server";
 import { PERMISSIONS } from "@/lib/auth/permissions";
+import { APP_ROLES } from "@/lib/auth/roles";
 import {
   computeCashCheckDifference,
   validatePaymentAllocations,
   type CashCheckReason,
 } from "@/lib/finance/finance-core";
+
 
 export type FinanceActionState =
   | { ok: true; message: string; warning?: string }
@@ -400,3 +402,75 @@ export async function payMembershipDueAction(
     return fail("Chyba pri evidencii úhrady.");
   }
 }
+
+// =============================================================================
+// ADMIN: Úplné vynulowanie pokladne a reset finančných údajov na nulu
+// =============================================================================
+
+export async function resetFinanceDataAction(
+  _prev: FinanceActionState | null,
+  formData: FormData,
+): Promise<FinanceActionState> {
+  try {
+    const ctx = await getAuthContext();
+    const isAdmin = ctx.roles.includes(APP_ROLES.ADMIN) || ctx.role === APP_ROLES.ADMIN;
+    if (!isAdmin) {
+      return fail("Túto akciu môže vykonať iba administrátor.");
+    }
+
+    const confirmText = String(formData.get("confirm_text") ?? "").trim();
+    if (confirmText !== "VYNULOVAT") {
+      return fail("Pre potvrdenie vynulovania musíte napísať presne text: VYNULOVAT", {
+        confirm_text: "Nesprávny potvrdzujúci text.",
+      });
+    }
+
+    const supabase = await createClient();
+
+    // 1. Zmazanie závislých tabuliek a transakcií (poradie kvôli FK)
+    await supabase.from("finance_membership_payments").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+    await supabase.from("finance_transaction_attachments").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+    await supabase.from("finance_plans").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+    await supabase.from("finance_cash_checks").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+    await supabase.from("finance_closings").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+    await supabase.from("finance_transactions").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+
+    // 2. Reset členských predpisov (neuhradené / nulová úhrada)
+    await supabase
+      .from("finance_membership_dues")
+      .update({ amount_paid_minor: 0, status: "PENDING" } as never)
+      .neq("id", "00000000-0000-0000-0000-000000000000");
+
+    // 3. Vynulovanie počiatočných zostatkov všetkých aktívnych účtov na 0
+    await supabase
+      .from("finance_accounts")
+      .update({ opening_balance_minor: 0, opening_balance_date: new Date().toISOString().split("T")[0] } as never)
+      .neq("id", "00000000-0000-0000-0000-000000000000");
+
+    // 4. Audit log záznam
+    await supabase.from("audit_log").insert({
+      user_id: ctx.userId,
+      module: "finance",
+      action: "finance:reset_all",
+      entity_type: "finance_accounts",
+      entity_id: null,
+      new_data: { reset_at: new Date().toISOString(), reset_by: ctx.email ?? ctx.userId },
+    } as never);
+
+    revalidatePath("/finance");
+    revalidatePath("/finance/cashbook");
+    revalidatePath("/dashboard/finance");
+    revalidatePath("/dashboard/finance/transactions");
+    revalidatePath("/reports/finance-ledger");
+    revalidatePath("/reports/finance-monthly-summary");
+
+    return {
+      ok: true,
+      message: "Pokladňa a finančné záznamy boli úspešne vynulované na nulu.",
+    };
+  } catch (e) {
+    console.error("[resetFinanceDataAction] error:", e);
+    return fail("Chyba pri vynulovaní finančných údajov.");
+  }
+}
+
