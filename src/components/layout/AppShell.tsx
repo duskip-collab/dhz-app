@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Sidebar } from "./Sidebar";
 import { TopBar, DesktopTopBar } from "./TopBar";
@@ -23,6 +24,41 @@ export function AppShell({
   children: React.ReactNode;
 }) {
   const router = useRouter();
+  const [showOnboarding, setShowOnboarding] = useState(false);
+
+  // Check if onboarding is needed - member has onboarding_completed = false
+  useEffect(() => {
+    async function checkOnboarding() {
+      const supabase = createClient();
+      const { data: authData, error: authError } = await supabase.auth.getUser();
+      if (authError) {
+        console.error("Error getting auth user:", authError);
+        return;
+      }
+      const { data, error: dbError } = (await supabase
+        .from("members")
+        .select("onboarding_completed")
+        .eq("auth_user_id", authData.user?.id)
+        .single()) as { data: { onboarding_completed: boolean } | null; error: any };
+
+      if (authError) {
+        console.error("Error getting auth user:", authError);
+        return;
+      }
+
+      if (dbError && dbError.code !== "PGRST116") {
+        console.error("Error checking onboarding status:", dbError);
+        return;
+      }
+
+      // If member exists and onboarding is not completed, show the modal
+      if (data && data.onboarding_completed === false) {
+        setShowOnboarding(true);
+      }
+    }
+
+    checkOnboarding();
+  }, [permissions, roles, userEmail]);
 
   async function handleLogout() {
     const supabase = createClient();
