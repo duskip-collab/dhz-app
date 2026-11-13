@@ -124,6 +124,7 @@ export interface EquipmentItemDetail extends EquipmentItem {
   vehicle_details: VehicleDetails | null;
   current_assignment: EquipmentAssignment | null;
   recent_maintenance: MaintenanceLog[];
+  active_assignments_count: number;
 }
 
 export interface ListEquipmentParams {
@@ -372,6 +373,16 @@ export async function getEquipmentById(equipmentId: string): Promise<EquipmentIt
     throw createAuthError(500, "Chyba pri načítavaní výdaja.");
   }
 
+  const { count: activeCount, error: countError } = await supabase
+    .from("equipment_assignments")
+    .select("id", { count: "exact", head: true })
+    .eq("equipment_id", equipmentId)
+    .is("returned_at", null);
+  if (countError) {
+    console.error("[getEquipmentById] active assignments count error:", countError);
+    throw createAuthError(500, "Chyba pri načítavaní počtu aktívnych priradení.");
+  }
+
   const { data: maintenance, error: maintError } = await supabase
     .from("equipment_maintenance_logs")
     .select("*")
@@ -389,6 +400,7 @@ export async function getEquipmentById(equipmentId: string): Promise<EquipmentIt
     vehicle_details: (vehicle as VehicleDetails | null) ?? null,
     current_assignment: (assignment as EquipmentAssignment | null) ?? null,
     recent_maintenance: (maintenance || []) as MaintenanceLog[],
+    active_assignments_count: activeCount ?? 0,
   };
 }
 
@@ -620,7 +632,8 @@ export async function replaceEquipmentPhotoPath(
 
 // =============================================================================
 // WRITE – assignEquipmentToMember
-// Vyžaduje `inventory.edit`. Vytvorí assignment a prepne stav na IN_SERVICE.
+// Vyžaduje `inventory.edit`. Skontroluje dostupnosť na sklade (quantity − aktívne priradenia > 0),
+// vytvorí assignment a ak sa vyposledili všetky kusy, prepne stav na IN_SERVICE.
 // =============================================================================
 
 export async function assignEquipmentToMember(
@@ -655,6 +668,36 @@ export async function assignEquipmentToMember(
   }
   if (!member) throw createAuthError(404, "Člen sa nenašiel.");
 
+  // --- KONTROLA SKLADU: quantity − aktívne priradenia > 0 ---
+  const { data: item, error: itemError } = await supabase
+    .from("equipment_items")
+    .select("id, name, quantity, status")
+    .eq("id", parsed.data.equipment_id)
+    .maybeSingle();
+  if (itemError) {
+    console.error("[assignEquipmentToMember] item check error:", itemError);
+    throw createAuthError(500, "Chyba pri kontrole položky.");
+  }
+  if (!item) throw createAuthError(404, "Položka sa nenašla.");
+
+  const totalQuantity = Number(item.quantity ?? 1);
+  const { count: activeCount, error: countError } = await supabase
+    .from("equipment_assignments")
+    .select("id", { count: "exact", head: true })
+    .eq("equipment_id", parsed.data.equipment_id)
+    .is("returned_at", null);
+  if (countError) {
+    console.error("[assignEquipmentToMember] active assignments count error:", countError);
+    throw createAuthError(500, "Chyba pri kontrole skladovej dostupnosti.");
+  }
+  const available = totalQuantity - (activeCount ?? 0);
+  if (available <= 0) {
+    throw createAuthError(
+      409,
+      `Položka "${item.name}" nie je dostupná na sklade (0 z ${totalQuantity} kusov voľných).`
+    );
+  }
+
   const { data, error } = await supabase
     .from("equipment_assignments")
     .insert({
@@ -672,12 +715,16 @@ export async function assignEquipmentToMember(
     throw createAuthError(500, "Chyba pri výdaji položky.");
   }
 
-  const { error: statusError } = await supabase
-    .from("equipment_items")
-    .update({ status: "IN_SERVICE" })
-    .eq("id", parsed.data.equipment_id);
-  if (statusError) {
-    console.error("[assignEquipmentToMember] status update error:", statusError);
+  // Ak sa vyposledili všetky kusy, nastavíme stav na IN_SERVICE.
+  const newActive = (activeCount ?? 0) + 1;
+  if (newActive >= totalQuantity) {
+    const { error: statusError } = await supabase
+      .from("equipment_items")
+      .update({ status: "IN_SERVICE" })
+      .eq("id", parsed.data.equipment_id);
+    if (statusError) {
+      console.error("[assignEquipmentToMember] status update error:", statusError);
+    }
   }
 
   const assignment = data as EquipmentAssignment;
@@ -686,6 +733,117 @@ export async function assignEquipmentToMember(
     member_id: assignment.member_id,
   });
   return assignment;
+}
+
+// =============================================================================
+// WRITE – assignEquipmentToMembersBulk
+// Vyžaduje `inventory.edit`. Hromadne priradí viacerým členom naraz (iba keď quantity > 1).
+// =============================================================================
+
+export async function assignEquipmentToMembersBulk(
+  equipmentId: string,
+  memberIds: string[],
+  condition?: EquipmentItemInput["condition"] | null,
+  notes?: string | null
+): Promise<EquipmentAssignment[]> {
+  const ctx = await requireAuthenticated();
+  await assertPermission(ctx, PERMISSIONS.INVENTORY_EDIT);
+
+  if (!memberIds || memberIds.length === 0) {
+    throw createAuthError(400, "Musíte vybrať aspoň jednoho člena.");
+  }
+
+  const parsed = validateEquipmentAssignment({
+    equipment_id: equipmentId,
+    member_id: memberIds[0],
+    condition_on_assign: condition ?? null,
+    notes: notes ?? null,
+  });
+  if (!parsed.ok) {
+    throw createAuthError(400, "Neplatné údaje výdaja.", parsed.errors);
+  }
+
+  const supabase = await createClient();
+
+  const { data: members, error: membersError } = await supabase
+    .from("members")
+    .select("id")
+    .in("id", memberIds);
+  if (membersError) {
+    console.error("[assignEquipmentToMembersBulk] members check error:", membersError);
+    throw createAuthError(500, "Chyba pri kontrole členov.");
+  }
+  if (!members || members.length !== memberIds.length) {
+    throw createAuthError(404, "Jeden alebo viacerí členovia sa nenašli.");
+  }
+
+  const { data: item, error: itemError } = await supabase
+    .from("equipment_items")
+    .select("id, name, quantity, status")
+    .eq("id", equipmentId)
+    .maybeSingle();
+  if (itemError) {
+    console.error("[assignEquipmentToMembersBulk] item check error:", itemError);
+    throw createAuthError(500, "Chyba pri kontrole položky.");
+  }
+  if (!item) throw createAuthError(404, "Položka sa nenašla.");
+
+  const totalQuantity = Number(item.quantity ?? 1);
+  const { count: activeCount, error: countError } = await supabase
+    .from("equipment_assignments")
+    .select("id", { count: "exact", head: true })
+    .eq("equipment_id", equipmentId)
+    .is("returned_at", null);
+  if (countError) {
+    console.error("[assignEquipmentToMembersBulk] active assignments count error:", countError);
+    throw createAuthError(500, "Chyba pri kontrole skladovej dostupnosti.");
+  }
+  const available = totalQuantity - (activeCount ?? 0);
+  if (available < memberIds.length) {
+    throw createAuthError(
+      409,
+      `Nedostatok kusov na sklade: požiadané ${memberIds.length}, voľných len ${available} z ${totalQuantity}.`
+    );
+  }
+
+  const assignmentsToInsert = memberIds.map((memberId) => ({
+    equipment_id: equipmentId,
+    member_id: memberId,
+    assigned_by: ctx.userId,
+    condition_on_assign: parsed.data.condition_on_assign,
+    notes: parsed.data.notes,
+  }));
+
+  const { data, error } = await supabase
+    .from("equipment_assignments")
+    .insert(assignmentsToInsert)
+    .select(ASSIGN_MEMBER_SELECT);
+
+  if (error) {
+    console.error("[assignEquipmentToMembersBulk] Supabase error:", error);
+    throw createAuthError(500, "Chyba pri hromadnom výdaji položky.");
+  }
+
+  const newActive = (activeCount ?? 0) + memberIds.length;
+  if (newActive >= totalQuantity) {
+    const { error: statusError } = await supabase
+      .from("equipment_items")
+      .update({ status: "IN_SERVICE" })
+      .eq("id", equipmentId);
+    if (statusError) {
+      console.error("[assignEquipmentToMembersBulk] status update error:", statusError);
+    }
+  }
+
+  const assignments = (data ?? []) as EquipmentAssignment[];
+  for (const a of assignments) {
+    await auditEquipmentAssignment(ctx.userId, "assign", a.id, {
+      equipment_id: a.equipment_id,
+      member_id: a.member_id,
+    });
+  }
+
+  return assignments;
 }
 
 // =============================================================================

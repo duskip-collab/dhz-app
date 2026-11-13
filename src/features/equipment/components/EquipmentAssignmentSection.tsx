@@ -2,10 +2,10 @@
 
 import { useActionState, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { UserRound, Plus, Undo2 } from "lucide-react";
+import { UserRound, Plus, Undo2, Users } from "lucide-react";
 import type { EquipmentItemDetail } from "@/lib/equipment/equipment.service";
 import type { Member } from "@/lib/members/members.service";
-import { assignEquipmentAction, returnEquipmentAction } from "@/app/(app)/inventory/actions";
+import { assignEquipmentAction, assignEquipmentBulkAction, returnEquipmentAction } from "@/app/(app)/inventory/actions";
 import { ConditionBadge } from "./EquipmentBadges";
 
 const CONDITIONS = [
@@ -40,7 +40,11 @@ function AssignModal({
   onClose: () => void;
 }) {
   const router = useRouter();
-  const [state, formAction, pending] = useActionState(assignEquipmentAction, null);
+  const [bulk, setBulk] = useState(false);
+  const [state, formAction, pending] = useActionState(
+    bulk ? assignEquipmentBulkAction : assignEquipmentAction,
+    null
+  );
 
   useEffect(() => {
     if (state?.ok) {
@@ -50,6 +54,8 @@ function AssignModal({
   }, [state, onClose, router]);
 
   const errors = !state || state.ok ? {} : state.errors;
+  const available = Number(item.quantity ?? 1) - (item.active_assignments_count ?? 0);
+  const canBulk = available > 1;
 
   return (
     <div
@@ -63,15 +69,61 @@ function AssignModal({
     >
       <div className="w-full max-w-lg rounded-xl bg-white p-6 shadow-xl">
         <h2 className="mb-4 text-lg font-bold text-gray-900">Priradiť členovi DHZ</h2>
-        <form action={formAction} className="space-y-4">
-          {state && !state.ok && state.message ? (
-            <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-[#C62828]">
-              {state.message}
-            </p>
-          ) : null}
-          <input type="hidden" name="equipment_id" value={item.id} />
+        <p className="mb-4 text-sm text-gray-600">
+          Voľných kusov: <span className="font-semibold">{available}</span> z {item.quantity ?? 1}
+        </p>
+        {state && !state.ok && state.message ? (
+          <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-[#C62828]">
+            {state.message}
+          </p>
+        ) : null}
+        <input type="hidden" name="equipment_id" value={item.id} />
+        {canBulk ? (
+          <div className="mb-4 p-3 rounded-lg border border-gray-200 bg-gray-50">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={bulk}
+                onChange={() => setBulk(!bulk)}
+                className="rounded text-[#C62828] focus:ring-[#C62828]"
+              />
+              <span className="text-sm font-medium text-gray-700">
+                Hromadné priradenie viacerým členom naraz
+              </span>
+            </label>
+          </div>
+        ) : null}
+        {bulk ? (
           <div>
-            <label htmlFor="member_id" className="mb-1.5 block text-sm font-medium text-gray-700">Člen</label>
+            <label htmlFor="member_ids" className="mb-1.5 block text-sm font-medium text-gray-700">
+              Členovia *
+            </label>
+            <select
+              id="member_ids"
+              name="member_ids"
+              multiple
+              required
+              defaultValue=""
+              className={inputCls}
+            >
+              <option value="" disabled>
+                — Vybrať členov —
+              </option>
+              {members.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.first_name} {m.last_name} ({m.member_number})
+                </option>
+              ))}
+            </select>
+            {errors.member_ids ? (
+              <p role="alert" className="mt-1 text-xs text-[#C62828]">{errors.member_ids}</p>
+            ) : null}
+          </div>
+        ) : (
+          <div>
+            <label htmlFor="member_id" className="mb-1.5 block text-sm font-medium text-gray-700">
+              Člen *
+            </label>
             <select id="member_id" name="member_id" required defaultValue="" className={inputCls}>
               <option value="" disabled>— Vybrať člena —</option>
               {members.map((m) => (
@@ -84,29 +136,36 @@ function AssignModal({
               <p role="alert" className="mt-1 text-xs text-[#C62828]">{errors.member_id}</p>
             ) : null}
           </div>
-          <div>
-            <label htmlFor="condition_on_assign" className="mb-1.5 block text-sm font-medium text-gray-700">
-              Stav pri odovzdaní
-            </label>
-            <select id="condition_on_assign" name="condition_on_assign" defaultValue={item.condition} className={inputCls}>
-              {CONDITIONS.map((c) => (
-                <option key={c.value} value={c.value}>{c.label}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label htmlFor="notes" className="mb-1.5 block text-sm font-medium text-gray-700">Poznámka</label>
-            <input id="notes" name="notes" className={inputCls} />
-          </div>
-          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-            <button type="button" onClick={onClose} disabled={pending} className="min-h-[44px] rounded-lg border border-gray-200 px-5 text-sm font-semibold text-gray-700 transition hover:border-gray-300 disabled:opacity-50">
-              Zrušiť
-            </button>
-            <button type="submit" disabled={pending} className="min-h-[44px] rounded-lg bg-[#C62828] px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#8E0000] disabled:opacity-50">
-              {pending ? "Priraďujem…" : "Priradiť"}
-            </button>
-          </div>
-        </form>
+        )}
+        <div>
+          <label htmlFor="condition_on_assign" className="mb-1.5 block text-sm font-medium text-gray-700">
+            Stav pri odovzdaní
+          </label>
+          <select
+            id="condition_on_assign"
+            name="condition_on_assign"
+            defaultValue={item.condition}
+            className={inputCls}
+          >
+            {CONDITIONS.map((c) => (
+              <option key={c.value} value={c.value}>{c.label}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label htmlFor="notes" className="mb-1.5 block text-sm font-medium text-gray-700">
+            Poznámka
+          </label>
+          <textarea id="notes" name="notes" rows={3} className={inputCls} />
+        </div>
+        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <button type="button" onClick={onClose} disabled={pending} className="min-h-[44px] rounded-lg border border-gray-200 px-5 text-sm font-semibold text-gray-700 transition hover:border-gray-300 disabled:opacity-50">
+            Zrušiť
+          </button>
+          <button type="submit" disabled={pending} className="min-h-[44px] rounded-lg bg-[#C62828] px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#8E0000] disabled:opacity-50">
+            {pending ? "Priraďujem…" : bulk ? "Priradiť členom" : "Priradiť"}
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -235,7 +294,14 @@ export function EquipmentAssignmentSection({
       ) : (
         <div className="mt-4">
           <p className="text-sm text-gray-500">Položka je na sklade.</p>
-          {canEdit ? (
+          <p className="text-xs text-gray-400">
+            Voľných kusov:{" "}
+            <span className="font-semibold">
+              {Number(item.quantity ?? 1) - (item.active_assignments_count ?? 0)}
+            </span>{" "}
+            z {item.quantity ?? 1}
+          </p>
+          {canEdit && (Number(item.quantity ?? 1) - (item.active_assignments_count ?? 0)) > 0 ? (
             <button
               type="button"
               onClick={() => setAssigning(true)}

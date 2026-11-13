@@ -6,6 +6,7 @@ import {
   createEquipmentItem,
   updateEquipmentItem,
   assignEquipmentToMember,
+  assignEquipmentToMembersBulk,
   returnEquipmentFromMember,
   addMaintenanceLog,
   deleteEquipmentItem,
@@ -213,10 +214,59 @@ export async function assignEquipmentAction(
     revalidatePath(`/inventory/${equipmentId}`);
     return { ok: true, equipmentId, assignmentId: assignment.id };
   } catch (e) {
-    if ((e as { statusCode?: number }).statusCode === 400) {
+    const status = (e as { statusCode?: number }).statusCode ?? 500;
+    if (status === 409) {
+      return fail(e instanceof Error ? e.message : "Položka nie je dostupná na sklade.");
+    }
+    if (status === 400) {
       return fail("Skontrolujte výdaj.", detailsFrom(e));
     }
     return handleError(e, "Chyba pri výdaji položky.");
+  }
+}
+
+// =============================================================================
+// BULK ASSIGN – hromadné priradenie viacerým členom naraz
+// =============================================================================
+
+export async function assignEquipmentBulkAction(
+  _prev: EquipmentActionState | null,
+  formData: FormData
+): Promise<EquipmentActionState> {
+  const equipmentId = field(formData, "equipment_id") ?? "";
+  const memberIds = formData.getAll("member_ids").map(String).filter(Boolean);
+  const conditionRaw = field(formData, "condition_on_assign");
+
+  if (!equipmentId) {
+    return fail("Chýba identifikátor položky.");
+  }
+  if (memberIds.length === 0) {
+    return fail("Vyberte aspoň jedného člena.", { member_ids: "Vyberte aspoň jedného člena." });
+  }
+
+  try {
+    const assignments = await assignEquipmentToMembersBulk(
+      equipmentId,
+      memberIds,
+      conditionRaw ? (conditionRaw as EquipmentCondition) : null,
+      field(formData, "notes")
+    );
+    revalidatePath("/inventory");
+    revalidatePath(`/inventory/${equipmentId}`);
+    return {
+      ok: true,
+      equipmentId,
+      assignmentId: assignments[0]?.id,
+    };
+  } catch (e) {
+    const status = (e as { statusCode?: number }).statusCode ?? 500;
+    if (status === 409) {
+      return fail(e instanceof Error ? e.message : "Nedostatok kusov na sklade.");
+    }
+    if (status === 400) {
+      return fail("Skontrolujte hromadný výdaj.", detailsFrom(e));
+    }
+    return handleError(e, "Chyba pri hromadnom výdaji položky.");
   }
 }
 
