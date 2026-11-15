@@ -66,12 +66,16 @@ CREATE TABLE IF NOT EXISTS public.vehicle_equipment (
     quantity INTEGER NOT NULL DEFAULT 1 CHECK (quantity > 0),
     placement TEXT,
     notes TEXT,
+    responsible_member_id UUID REFERENCES public.members(id) ON DELETE SET NULL,
     created_by UUID REFERENCES auth.users(id) ON DELETE SET NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     CONSTRAINT vehicle_equipment_no_self CHECK (vehicle_id <> equipment_id),
     CONSTRAINT vehicle_equipment_unique UNIQUE (vehicle_id, equipment_id)
 );
+
+CREATE INDEX IF NOT EXISTS idx_equipment_items_responsible
+    ON public.equipment_items(responsible_member_id);
 
 CREATE INDEX IF NOT EXISTS idx_vehicle_equipment_vehicle
     ON public.vehicle_equipment(vehicle_id);
@@ -101,6 +105,59 @@ CREATE INDEX IF NOT EXISTS idx_equipment_faults_equipment
     ON public.equipment_faults(equipment_id);
 CREATE INDEX IF NOT EXISTS idx_equipment_faults_status
     ON public.equipment_faults(status);
+
+-- ============================================================================
+-- 4. RLS POLITIKY pre equipment_faults
+-- ==========================================================================--
+
+-- 4.1. Select: Člen vidí vlastné nahlásené poruchy (reported_by = jeho member_id)
+-- a zodpovedné osoby (responsible_member_id na equipmente) vidí všetky.
+DROP POLICY IF EXISTS equipment_faults_select_authenticated ON public.equipment_faults;
+CREATE POLICY equipment_faults_select_authenticated
+    ON public.equipment_faults FOR SELECT TO authenticated
+    USING (
+        reported_by = public.current_member_id()
+        OR
+        EXISTS (
+            SELECT 1 FROM public.equipment_items ei
+            WHERE ei.id = equipment_faults.equipment_id
+            AND ei.responsible_member_id = public.current_member_id()
+        )
+        OR
+        EXISTS (
+            SELECT 1 FROM public.roles r
+            JOIN public.user_roles ur ON ur.role_id = r.id
+            WHERE ur.user_id = auth.uid() AND r.code IN ('ADMIN', 'VELITEL', 'VEDENIE')
+        )
+        OR
+        public.has_permission(auth.uid(), 'fault.manage')
+    );
+
+-- 4.2. Insert: Každý s fault.create môže nahlásiť poruchu
+DROP POLICY IF EXISTS equipment_faults_insert_authenticated ON public.equipment_faults;
+CREATE POLICY equipment_faults_insert_authenticated
+    ON public.equipment_faults FOR INSERT TO authenticated
+    WITH CHECK (public.has_permission(auth.uid(), 'fault.create'));
+
+-- 4.3. Update: Výhradne zodpovedná osoba alebo člen s fault.manage
+DROP POLICY IF EXISTS equipment_faults_update_authenticated ON public.equipment_faults;
+CREATE POLICY equipment_faults_update_authenticated
+    ON public.equipment_faults FOR UPDATE TO authenticated
+    USING (
+        EXISTS (
+            SELECT 1 FROM public.equipment_items ei
+            WHERE ei.id = equipment_faults.equipment_id
+            AND ei.responsible_member_id = public.current_member_id()
+        )
+        OR
+        public.has_permission(auth.uid(), 'fault.manage')
+    );
+
+-- 4.4. Delete: Výhradne člen s fault.manage
+DROP POLICY IF EXISTS equipment_faults_delete_authenticated ON public.equipment_faults;
+CREATE POLICY equipment_faults_delete_authenticated
+    ON public.equipment_faults FOR DELETE TO authenticated
+    USING (public.has_permission(auth.uid(), 'fault.manage'));
 
 -- ============================================================================
 -- 4. EQUIPMENT_INSPECTIONS

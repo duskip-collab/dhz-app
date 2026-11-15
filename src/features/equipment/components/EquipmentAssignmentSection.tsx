@@ -67,7 +67,7 @@ function AssignModal({
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="w-full max-w-lg rounded-xl bg-white p-6 shadow-xl">
+      <form action={formAction} className="w-full max-w-lg rounded-xl bg-white p-6 shadow-xl space-y-4">
         <h2 className="mb-4 text-lg font-bold text-gray-900">Priradiť členovi DHZ</h2>
         <p className="mb-4 text-sm text-gray-600">
           Voľných kusov: <span className="font-semibold">{available}</span> z {item.quantity ?? 1}
@@ -166,7 +166,7 @@ function AssignModal({
             {pending ? "Priraďujem…" : bulk ? "Priradiť členom" : "Priradiť"}
           </button>
         </div>
-      </div>
+      </form>
     </div>
   );
 }
