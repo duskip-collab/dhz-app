@@ -81,6 +81,7 @@ const FAULT_EQUIPMENT_SELECT =
 export async function getFaults(params: {
   status?: FaultStatusValue;
   equipment_id?: string;
+  assigned_to?: string;
   open_only?: boolean;
   limit?: number;
 } = {}): Promise<EquipmentFault[]> {
@@ -95,6 +96,7 @@ export async function getFaults(params: {
 
   if (params.status) query = query.eq("status", params.status);
   if (params.equipment_id) query = query.eq("equipment_id", params.equipment_id);
+  if (params.assigned_to) query = query.eq("assigned_to", params.assigned_to);
   if (params.open_only) query = query.in("status", ["REPORTED", "TRIAGED", "IN_PROGRESS"]);
 
   const limit = params.limit ?? 200;
@@ -156,6 +158,34 @@ export async function reportFault(input: FaultInput): Promise<EquipmentFault> {
     console.error("[reportFault] Supabase error:", error);
     throw createAuthError(500, "Chyba pri nahlasovani poruchy.");
   }
+
+  // Notifikácia pre zodpovednú osobu (assigned_to), ak je nastavená
+  if (parsed.data.assigned_to) {
+    try {
+      const { data: member } = await supabase
+        .from("members")
+        .select("auth_user_id")
+        .eq("id", parsed.data.assigned_to)
+        .single();
+      if (member?.auth_user_id) {
+        await supabase.from("expiry_notifications").insert({
+          user_id: member.auth_user_id,
+          member_id: parsed.data.assigned_to,
+          notification_type: "fault_assigned",
+          reference_id: (data as EquipmentFault).id,
+          item_name: (data as EquipmentFault).title,
+          expiry_date: null,
+          days_until_expiry: null,
+          notification_sent_at: new Date().toISOString(),
+          viewed_at: null,
+        } as never);
+      }
+    } catch (notifyErr) {
+      // Notifikácia nie je kritická - porucha bola vytvorená aj tak
+      console.warn("[reportFault] Notification insert skipped:", notifyErr);
+    }
+  }
+
   await logSecurityEvent({
     userId: ctx.userId,
     module: AUDIT_MODULES.EQUIPMENT_FAULTS,
@@ -173,6 +203,30 @@ export async function reportFault(input: FaultInput): Promise<EquipmentFault> {
 
 export async function updateFault(faultId: string, input: FaultUpdate): Promise<EquipmentFault> {
   const ctx = await requireAuthenticated();
+
+  // Načítame aktuálnu poruchu, abychom zistili assigned_to
+  const supabase = await createClient();
+  const { data: existingFault, error: fetchError } = await supabase
+    .from("equipment_faults")
+    .select("id, assigned_to, status, reported_by")
+    .eq("id", faultId)
+    .single();
+
+  if (fetchError || !existingFault) {
+    throw createAuthError(404, "Porucha sa nenašla.");
+  }
+
+  const memberId = ctx.memberId;
+
+  // Len zodpovedná osoba (assigned_to) alebo osoba s fault.manage môže meniť stav
+  const isAssignedTo = existingFault.assigned_to === memberId;
+  const canManage = ctx.permissions.includes(PERMISSIONS.FAULT_MANAGE) ||
+    (await hasPermissionServer(PERMISSIONS.FAULT_MANAGE));
+
+  if (!isAssignedTo && !canManage) {
+    throw createAuthError(403, "Len zodpovedná osoba môže meniť stav tejto poruchy.");
+  }
+
   await assertPermission(ctx, PERMISSIONS.FAULT_MANAGE);
 
   const parsed = validateFaultUpdate(input);

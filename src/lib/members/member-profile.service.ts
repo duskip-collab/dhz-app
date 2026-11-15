@@ -47,7 +47,7 @@ export interface TrainingAttendance {
   id: string;
   training_id: string;
   member_id: string;
-  status: "PRESENT" | "ABSENT" | "EXCUSED" | "LATE";
+  status: "PRESENT" | "ABSENT";
   note: string | null;
   created_at: string;
   training: {
@@ -439,8 +439,6 @@ export interface MemberProfileStats {
   totalTrainingAttendances: number;
   presentCount: number;
   absentCount: number;
-  excusedCount: number;
-  lateCount: number;
   totalCompetitions: number;
 }
 
@@ -454,8 +452,6 @@ export function getMemberProfileStats(profile: MemberProfile): MemberProfileStat
     totalTrainingAttendances: profile.training.length,
     presentCount: profile.training.filter((t) => t.status === "PRESENT").length,
     absentCount: profile.training.filter((t) => t.status === "ABSENT").length,
-    excusedCount: profile.training.filter((t) => t.status === "EXCUSED").length,
-    lateCount: profile.training.filter((t) => t.status === "LATE").length,
     totalCompetitions: new Set(profile.competitions.map((c) => c.team.competition_id)).size,
   };
 }

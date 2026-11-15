@@ -468,10 +468,6 @@ function getStatusIcon(status: string) {
       return <CheckCircle className="h-5 w-5 text-green-500" />;
     case 'ABSENT':
       return <XCircle className="h-5 w-5 text-red-500" />;
-    case 'EXCUSED':
-      return <Clock className="h-5 w-5 text-yellow-500" />;
-    case 'LATE':
-      return <AlertCircle className="h-5 w-5 text-orange-500" />;
     default:
       return null;
   }
@@ -483,10 +479,6 @@ function getStatusLabel(status: string) {
       return 'Prítomný';
     case 'ABSENT':
       return 'Neprítomný';
-    case 'EXCUSED':
-      return 'Ospravedlnený';
-    case 'LATE':
-      return 'Neskôr';
     default:
       return status;
   }
@@ -498,10 +490,6 @@ function getTrainingStatusLabel(status: string) {
       return 'Zúčastnil sa';
     case 'ABSENT':
       return 'Neprítomný';
-    case 'EXCUSED':
-      return 'Ospravedlnený';
-    case 'LATE':
-      return 'Prišiel neskôr';
     default:
       return status;
   }

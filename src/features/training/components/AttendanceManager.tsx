@@ -13,8 +13,6 @@ import { updateAttendanceAction, type TrainingActionState } from "@/app/(app)/tr
 const STATUS_OPTIONS: { value: AttendanceStatus; label: string; activeCls: string }[] = [
   { value: "PRESENT", label: "🟢 Prítomný", activeCls: "border-green-300 bg-green-50 text-green-700" },
   { value: "ABSENT", label: "🔴 Neprítomný", activeCls: "border-red-300 bg-red-50 text-[#C62828]" },
-  { value: "EXCUSED", label: "🟡 Ospravedlnený", activeCls: "border-amber-300 bg-amber-50 text-amber-700" },
-  { value: "LATE", label: "🟠 Meškanie", activeCls: "border-orange-300 bg-orange-50 text-orange-700" },
 ];
 
 interface Entry {

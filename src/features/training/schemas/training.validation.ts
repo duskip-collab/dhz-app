@@ -3,7 +3,7 @@
 
 export type TrainingTargetGroup = "ALL" | "ADULT" | "YOUTH" | "PREPARATORY" | "DORAST";
 export type TrainingStatus = "PLANNED" | "COMPLETED" | "CANCELLED";
-export type AttendanceStatus = "PRESENT" | "ABSENT" | "EXCUSED" | "LATE";
+export type AttendanceStatus = "PRESENT" | "ABSENT";
 
 export type ValidationResult<T> =
   | { ok: true; data: T }
@@ -37,7 +37,7 @@ export interface AttendanceEntry {
 
 const TARGET_GROUPS: readonly TrainingTargetGroup[] = ["ALL", "ADULT", "YOUTH", "PREPARATORY", "DORAST"];
 const TRAINING_STATUSES: readonly TrainingStatus[] = ["PLANNED", "COMPLETED", "CANCELLED"];
-const ATTENDANCE_STATUSES: readonly AttendanceStatus[] = ["PRESENT", "ABSENT", "EXCUSED", "LATE"];
+const ATTENDANCE_STATUSES: readonly AttendanceStatus[] = ["PRESENT", "ABSENT"];
 
 function isBlank(value: string | null | undefined): boolean {
   return !value || value.trim().length === 0;

@@ -11,8 +11,6 @@ const QUOTE = '"';
 const STATUS_LABELS: Record<string, string> = {
   PRESENT: "Prítonný",
   ABSENT: "Neprítonný",
-  EXCUSED: "Ospravedlnený",
-  LATE: "Oneskorený",
 };
 
 const TARGET_GROUP_LABELS: Record<string, string> = {
@@ -149,9 +147,6 @@ function buildPrintHtml(data: TrainingExportData): string {
 
   const present = rows.filter((row) => row.status === "PRESENT").length;
   const absent = rows.filter((row) => row.status === "ABSENT").length;
-  const excused = rows.filter((row) => row.status === "EXCUSED").length;
-  const late = rows.filter((row) => row.status === "LATE").length;
-
   const rowsHtml = rows
     .map(
       (row, index) => `
@@ -218,7 +213,6 @@ function buildPrintHtml(data: TrainingExportData): string {
   </table>
   <table class="summary">
     <tr><td class="k">Prítomní:</td><td>${present}</td><td class="k">Neprítomní:</td><td>${absent}</td></tr>
-    <tr><td class="k">Ospravedlnení:</td><td>${excused}</td><td class="k">Oneskorení:</td><td>${late}</td></tr>
     <tr><td class="k">Celkový počet členov:</td><td>${rows.length}</td><td></td><td></td></tr>
   </table>
   <table class="signature">

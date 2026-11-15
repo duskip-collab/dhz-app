@@ -285,6 +285,23 @@ export async function verifyInventoryItem(
     console.error("[verifyInventoryItem] Supabase error:", error);
     throw createAuthError(500, "Chyba pri overovani polozky.");
   }
+
+  // Automatické uzavretie kontroly, ked su vsetky polozky overene (found !== null)
+  const { data: allItems, error: itemsError } = await supabase
+    .from("inventory_check_items")
+    .select("found")
+    .eq("check_id", parsed.data.check_id);
+
+  if (!itemsError && allItems && allItems.length > 0) {
+    const allVerified = allItems.every((i) => i.found !== null);
+    if (allVerified) {
+      await supabase
+        .from("inventory_checks")
+        .update({ status: "COMPLETED", completed_at: new Date().toISOString() } as never)
+        .eq("id", parsed.data.check_id);
+    }
+  }
+
   return data as InventoryCheckItem;
 }
 

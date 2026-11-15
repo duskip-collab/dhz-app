@@ -481,7 +481,7 @@ export interface Database {
           id: string;
           training_id: string;
           member_id: string;
-          status: "PRESENT" | "ABSENT" | "EXCUSED" | "LATE";
+          status: "PRESENT" | "ABSENT";
           note: string | null;
           created_at: string;
           updated_at: string;
@@ -492,7 +492,7 @@ export interface Database {
           id?: string;
           training_id?: string;
           member_id?: string;
-          status?: "PRESENT" | "ABSENT" | "EXCUSED" | "LATE";
+          status?: "PRESENT" | "ABSENT";
           note?: string | null;
           created_at?: string;
           updated_at?: string;
@@ -503,7 +503,7 @@ export interface Database {
           id?: string;
           training_id?: string;
           member_id?: string;
-          status?: "PRESENT" | "ABSENT" | "EXCUSED" | "LATE";
+          status?: "PRESENT" | "ABSENT";
           note?: string | null;
           created_at?: string;
           updated_at?: string;

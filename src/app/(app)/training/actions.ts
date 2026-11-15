@@ -39,8 +39,6 @@ interface AttendanceSummaryRow {
   totalTrainings: number;
   present: number;
   absent: number;
-  excused: number;
-  late: number;
   participation: number;
   absenceRate: number;
 }
@@ -49,8 +47,6 @@ interface AttendanceSummaryCounts {
   totalTrainings: number;
   present: number;
   absent: number;
-  excused: number;
-  late: number;
   member: Pick<
     Database["public"]["Tables"]["members"]["Row"],
     "id" | "first_name" | "last_name"
@@ -335,8 +331,6 @@ export async function generateAttendanceSummaryAction(): Promise<
           totalTrainings: 0,
           present: 0,
           absent: 0,
-          excused: 0,
-          late: 0,
           member,
         };
       }
@@ -353,10 +347,6 @@ export async function generateAttendanceSummaryAction(): Promise<
           memberAttendance.present += 1;
         } else if (record.status === "ABSENT") {
           memberAttendance.absent += 1;
-        } else if (record.status === "EXCUSED") {
-          memberAttendance.excused += 1;
-        } else if (record.status === "LATE") {
-          memberAttendance.late += 1;
         }
       }
     }
@@ -371,10 +361,8 @@ export async function generateAttendanceSummaryAction(): Promise<
         totalTrainings: total,
         present: entry.present,
         absent: entry.absent,
-        excused: entry.excused,
-        late: entry.late,
         participation: total > 0 ? (entry.present / total) * 100 : 0,
-        absenceRate: total > 0 ? ((entry.absent + entry.excused + entry.late) / total) * 100 : 0,
+        absenceRate: total > 0 ? ((entry.absent) / total) * 100 : 0,
       };
     });
 

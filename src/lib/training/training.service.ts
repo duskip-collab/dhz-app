@@ -40,7 +40,16 @@ export type {
 
 export type TrainingTargetGroup = "ALL" | "ADULT" | "YOUTH" | "PREPARATORY" | "DORAST";
 export type TrainingStatus = "PLANNED" | "COMPLETED" | "CANCELLED";
-export type AttendanceStatus = "PRESENT" | "ABSENT" | "EXCUSED" | "LATE";
+export type AttendanceStatus = "PRESENT" | "ABSENT";
+
+/**
+ * Spätná kompatibilita: staré stavy EXCUSED/LATE v DB sa mapujú na ABSENT.
+ * Nový systém pozná len dve stavy: PRÍTOMNÝ / NEPRIÍTOMNÝ.
+ */
+export function normalizeAttendanceStatus(status: string | null | undefined): AttendanceStatus {
+  if (status === "PRESENT") return "PRESENT";
+  return "ABSENT";
+}
 
 export interface TrainerInfo {
   id: string;
@@ -384,7 +393,10 @@ export async function bulkUpdateAttendance(
     throw createAuthError(500, "Chyba pri ukladaní dochádzky.");
   }
 
-  const records = (data || []) as AttendanceRecord[];
+  const records = (data || []).map((r) => ({
+    ...r,
+    status: normalizeAttendanceStatus(r.status),
+  })) as AttendanceRecord[];
   await auditAttendanceUpdate(ctx.userId, trainingId, {
     count: records.length,
     entries: parsed.data.map((e) => ({ member_id: e.member_id, status: e.status })),
@@ -470,7 +482,10 @@ export async function getTrainingExportData(
     string,
     { status: AttendanceStatus; note: string | null }
   >(
-    (attendance || []).map((a) => [a.member_id, { status: a.status, note: a.note }])
+    (attendance || []).map((a) => [
+      a.member_id,
+      { status: normalizeAttendanceStatus(a.status), note: a.note },
+    ])
   );
 
   const membershipFilter = GROUP_TO_MEMBERSHIP[training.target_group];
