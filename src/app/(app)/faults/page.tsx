@@ -1,13 +1,14 @@
 import { AlertTriangle } from "lucide-react";
 import Link from "next/link";
+import { useState } from "react";
 import { requireAnyPermission } from "@/lib/auth/server";
 import { PERMISSIONS, hasPermission } from "@/lib/auth/permissions";
-import { getFaults } from "@/lib/equipment/faults.service";
+import { getFaults, reportFault, updateFault, deleteFault } from "@/lib/equipment/faults.service";
 import { getEquipmentItems } from "@/lib/equipment/equipment.service";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { reportFaultAction, updateFaultAction, deleteFaultAction } from "./actions";
+import { useSearchParams, useNavigate } from "next/navigation";
 
 const inputCls =
   "w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#C62828] focus:border-[#C62828] bg-white";
@@ -27,6 +28,22 @@ const STATUS_LABEL: Record<string, string> = {
   CLOSED: "Uzavretá",
 };
 
+const STATUS_COLORS: Record<string, "green" | "yellow" | "red" | "blue" | "gray"> = {
+  REPORTED: "gray",
+  TRIAGED: "blue",
+  IN_PROGRESS: "orange",
+  RESOLVED: "green",
+  CLOSED: "gray",
+};
+
+const STATUS_ORDER: Record<string, number> = {
+  REPORTED: 1,
+  TRIAGED: 2,
+  IN_PROGRESS: 3,
+  RESOLVED: 4,
+  CLOSED: 5,
+};
+
 export default async function FaultsPage({
   searchParams,
 }: {
@@ -44,40 +61,13 @@ export default async function FaultsPage({
   ]);
   const canManage = hasPermission(ctx.permissions, PERMISSIONS.FAULT_MANAGE);
 
-  return (
-    <div className="space-y-6">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-gray-400">
-            <AlertTriangle className="h-4 w-4" /> Technika
-          </p>
-          <h1 className="mt-1 text-2xl font-bold text-gray-900">Poruchy</h1>
-          <p className="mt-1 text-sm text-gray-500">Evidencia porúch techniky a ich riešenia.</p>
-        </div>
-        <Link href={openOnly ? "/faults" : "/faults?open=1"}>
-          <Button variant="secondary" size="sm">
-            {openOnly ? "Zobraziť všetky" : "Len otvorené"}
-          </Button>
-        </Link>
-      </div>
-
-      {error && (
-        <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">{error}</div>
-      )}
-      {success && (
-        <div className="rounded-lg border border-green-200 bg-green-50 p-4 text-sm text-green-800">{success}</div>
-      )}
-
-      <form action={reportFaultAction} className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
-        <h2 className="text-base font-bold text-gray-900 mb-4">Nahlásiť poruchu</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label htmlFor="f-equipment" className="block text-sm font-medium text-gray-700 mb-1">Technika *</label>
-            <select id="f-equipment" name="equipment_id" required className={inputCls}>
-              <option value="" disabled>Vyberte položku</option>
-              {items.map((i) => (
-                <option key={i.id} value={i.id}>{i.name}{i.inventory_number ? ` (${i.inventory_number})` : ""}</option>
-              ))}
+  // Calculate counters from all faults
+  const totalFaults = faults.length;
+  const reportedCount = faults.filter((f) => f.status === "REPORTED").length;
+  const triagedCount = faults.filter((f) => f.status === "TRIAGED").length;
+  const inProgressCount = faults.filter((f) => f.status === "IN_PROGRESS").length;
+  const resolvedCount = faults.filter((f) => f.status === "RESOLVED").length;
+  const closedCount = faults.filter((f) => f.status === "CLOSED").length;
             </select>
           </div>
           <div>
