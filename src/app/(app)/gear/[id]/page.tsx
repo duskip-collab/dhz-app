@@ -3,12 +3,13 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requirePermission } from "@/lib/auth/server";
 import { PERMISSIONS, hasPermission } from "@/lib/auth/permissions";
-import { getEquipmentById, getEquipmentPhotoUrl, getItemAssignmentHistory, type EquipmentAssignment } from "@/lib/equipment/equipment.service";
+import { getEquipmentById, getEquipmentPhotoUrls, getItemAssignmentHistory, type EquipmentAssignment } from "@/lib/equipment/equipment.service";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { deleteGearItemAction, returnGearAction } from "../actions";
 import { uploadEquipmentPhotoAction } from "../../inventory/actions";
 import { EquipmentPhotoUpload } from "@/features/equipment/components/EquipmentPhotoUpload";
+import { PhotoGallery } from "@/components/ui/PhotoGallery";
 
 const STATUS_LABELS: Record<string, { label: string; tone: "green" | "blue" | "yellow" | "red" | "gray" }> = {
   AVAILABLE: { label: "Dostupné", tone: "green" },
@@ -80,12 +81,12 @@ export default async function GearDetailPage({
   }
 
   // Fotografia položky (signed URL)
-  let photoUrl: string | null = null;
+  let photoUrls: string[] = [];
   if (item.photo_path) {
     try {
-      photoUrl = await getEquipmentPhotoUrl(item.photo_path);
+      photoUrls = await getEquipmentPhotoUrls(item.id, item.photo_path);
     } catch {
-      photoUrl = null;
+      photoUrls = [];
     }
   }
 
@@ -222,22 +223,21 @@ export default async function GearDetailPage({
 
         <div className="space-y-6">
           <section className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
-            <h2 className="text-base font-bold text-gray-900 mb-3">Fotografia</h2>
+            <PhotoGallery
+              photos={photoUrls.map((src, index) => ({
+                src,
+                alt: `${item.name} – fotografia ${index + 1}`,
+              }))}
+              title="Fotografie"
+            />
             {canEdit ? (
-              <EquipmentPhotoUpload
-                action={uploadEquipmentPhotoAction.bind(null, item.id)}
-                currentPhotoUrl={photoUrl}
-              />
-            ) : photoUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={photoUrl}
-                alt={item.name}
-                className="h-48 w-full rounded-lg border border-gray-200 object-cover"
-              />
-            ) : (
-              <p className="text-sm text-gray-500">Fotografia nie je k dispozícii.</p>
-            )}
+              <div className="mt-5 border-t border-gray-100 pt-4">
+                <EquipmentPhotoUpload
+                  action={uploadEquipmentPhotoAction.bind(null, item.id)}
+                  currentPhotoUrl={photoUrls[0] ?? null}
+                />
+              </div>
+            ) : null}
           </section>
           <section
             className={`rounded-xl border p-5 ${

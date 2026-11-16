@@ -3,7 +3,7 @@ import Link from "next/link";
 import { ArrowLeft, Package } from "lucide-react";
 import { requirePermission } from "@/lib/auth/server";
 import { PERMISSIONS, hasPermission } from "@/lib/auth/permissions";
-import { getEquipmentById, getEquipmentPhotoUrl } from "@/lib/equipment/equipment.service";
+import { getEquipmentById, getEquipmentPhotoUrls } from "@/lib/equipment/equipment.service";
 import { deleteInventoryItemAction, uploadEquipmentPhotoAction } from "../actions";
 import { listMembers, type Member } from "@/lib/members/members.service";
 import { EquipmentDetailHeader } from "@/features/equipment/components/EquipmentDetailHeader";
@@ -11,6 +11,7 @@ import { VehicleDetailsCard } from "@/features/equipment/components/VehicleDetai
 import { EquipmentAssignmentSection } from "@/features/equipment/components/EquipmentAssignmentSection";
 import { EquipmentPhotoUpload } from "@/features/equipment/components/EquipmentPhotoUpload";
 import { MaintenanceLogSection } from "@/features/equipment/components/MaintenanceLogSection";
+import { PhotoGallery } from "@/components/ui/PhotoGallery";
 
 export default async function EquipmentDetailPage({
   params,
@@ -40,12 +41,12 @@ export default async function EquipmentDetailPage({
   const canManage = hasPermission(ctx.permissions, PERMISSIONS.INVENTORY_MANAGE);
 
   // Fotografia položky (signed URL)
-  let photoUrl: string | null = null;
+  let photoUrls: string[] = [];
   if (item.photo_path) {
     try {
-      photoUrl = await getEquipmentPhotoUrl(item.photo_path);
+      photoUrls = await getEquipmentPhotoUrls(item.id, item.photo_path);
     } catch {
-      photoUrl = null;
+      photoUrls = [];
     }
   }
 
@@ -76,20 +77,26 @@ export default async function EquipmentDetailPage({
 
       <MaintenanceLogSection item={item} canEdit={canEdit} />
 
-      {(canEdit || canManage) && (
-        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-          <h2 className="text-base font-bold text-gray-900">Fotografia položky</h2>
-          <p className="mt-1 text-sm text-gray-500">
-            Výber súboru z počítača alebo priame odfotenie mobilom.
-          </p>
-          <div className="mt-3">
+      <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+        <PhotoGallery
+          photos={photoUrls.map((src, index) => ({
+            src,
+            alt: `${item.name} – fotografia ${index + 1}`,
+          }))}
+          title="Fotografie položky"
+        />
+        {(canEdit || canManage) && (
+          <div className="mt-5 border-t border-gray-100 pt-4">
+            <p className="mb-3 text-sm text-gray-500">
+              Výber súboru z počítača alebo priame odfotenie mobilom.
+            </p>
             <EquipmentPhotoUpload
               action={uploadEquipmentPhotoAction.bind(null, item.id)}
-              currentPhotoUrl={photoUrl}
+              currentPhotoUrl={photoUrls[0] ?? null}
             />
           </div>
-        </div>
-      )}
+        )}
+      </section>
 
       {canManage && (
         <div className="rounded-2xl border border-red-100 bg-red-50/40 p-5 shadow-sm">

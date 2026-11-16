@@ -34,6 +34,7 @@ export interface Vehicle {
   next_inspection_date: string | null;
   quantity: number;
   is_opp: boolean;
+  photo_path: string | null;
   notes: string | null;
   created_at: string;
   updated_at: string;

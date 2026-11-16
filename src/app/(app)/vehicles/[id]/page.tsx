@@ -4,9 +4,11 @@ import { notFound } from "next/navigation";
 import { requirePermission } from "@/lib/auth/server";
 import { PERMISSIONS, hasPermission } from "@/lib/auth/permissions";
 import { getVehicleById } from "@/lib/equipment/vehicles.service";
+import { getEquipmentPhotoUrls } from "@/lib/equipment/equipment.service";
 import { listMembers } from "@/lib/members/members.service";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
+import { PhotoGallery } from "@/components/ui/PhotoGallery";
 import { assignResponsibleMemberAction, removeResponsibleMemberAction } from "../actions";
 
 const ROLE_LABELS: Record<string, string> = {
@@ -50,6 +52,11 @@ export default async function VehicleDetailPage({
     vehicle = await getVehicleById(id);
   } catch {
     notFound();
+  }
+
+  let photoUrls: string[] = [];
+  if (vehicle.photo_path && hasPermission(ctx.permissions, PERMISSIONS.INVENTORY_VIEW)) {
+    photoUrls = await getEquipmentPhotoUrls(vehicle.id, vehicle.photo_path);
   }
 
   // Aktívni členovia pre priradenie zodpovedných osôb.
@@ -142,6 +149,16 @@ export default async function VehicleDetailPage({
           </Link>
         </div>
       </div>
+
+      <section className="rounded-xl border border-gray-200 bg-white p-6">
+        <PhotoGallery
+          photos={photoUrls.map((src, index) => ({
+            src,
+            alt: `${vehicle.name} – fotografia ${index + 1}`,
+          }))}
+          title="Fotografie techniky"
+        />
+      </section>
 
       <div className="rounded-xl border border-gray-200 bg-white p-6">
         <div className="flex items-center gap-2 mb-4">

@@ -1123,6 +1123,56 @@ export async function getEquipmentPhotoUrl(
   return data?.signedUrl ?? null;
 }
 
+/**
+ * Vráti podpísané URL fotiek položky z jej súkromného Storage priečinka.
+ * photo_path zostáva záložnou cestou, ak výpis priečinka nie je dostupný.
+ */
+export async function getEquipmentPhotoUrls(
+  equipmentId: string,
+  photoPath: string | null
+): Promise<string[]> {
+  const ctx = await requireAuthenticated();
+  await assertPermission(ctx, PERMISSIONS.INVENTORY_VIEW);
+
+  const supabase = await createClient();
+  const storage = supabase.storage.from(EQUIPMENT_PHOTO_BUCKET);
+  const listed = await storage.list(equipmentId, {
+    limit: 1000,
+    sortBy: { column: "name", order: "asc" },
+  });
+
+  if (listed.error) {
+    console.error("[getEquipmentPhotoUrls] Storage list error:", listed.error);
+  }
+
+  const paths = Array.from(
+    new Set([
+      ...(photoPath ? [photoPath] : []),
+      ...(listed.data ?? [])
+        .filter((file) => file.id !== null)
+        .map((file) => `${equipmentId}/${file.name}`),
+    ])
+  );
+
+  if (paths.length === 0) return [];
+
+  const { data, error } = await storage.createSignedUrls(paths, 60 * 10);
+  if (error) {
+    console.error("[getEquipmentPhotoUrls] Supabase error:", error);
+    return [];
+  }
+
+  return (data ?? []).flatMap((result) => {
+    if (result.error) {
+      console.error("[getEquipmentPhotoUrls] Failed to sign photo:", {
+        path: result.path,
+        error: result.error,
+      });
+    }
+    return result.signedUrl ? [result.signedUrl] : [];
+  });
+}
+
 // =============================================================================
 // WRITE – createEquipmentCategory
 // Vyžaduje `inventory.manage`.
