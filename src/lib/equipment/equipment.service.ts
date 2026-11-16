@@ -123,6 +123,7 @@ export interface EquipmentItemDetail extends EquipmentItem {
   category: EquipmentCategory | null;
   vehicle_details: VehicleDetails | null;
   current_assignment: EquipmentAssignment | null;
+  active_assignments: EquipmentAssignment[];
   recent_maintenance: MaintenanceLog[];
   active_assignments_count: number;
 }
@@ -362,16 +363,18 @@ export async function getEquipmentById(equipmentId: string): Promise<EquipmentIt
     throw createAuthError(500, "Chyba pri načítavaní údajov vozidla.");
   }
 
-  const { data: assignment, error: assignError } = await supabase
+  const { data: assignments, error: assignError } = await supabase
     .from("equipment_assignments")
     .select(ASSIGN_MEMBER_SELECT)
     .eq("equipment_id", equipmentId)
     .is("returned_at", null)
-    .maybeSingle();
+    .order("assigned_at", { ascending: false });
   if (assignError) {
     console.error("[getEquipmentById] assignment error:", assignError);
-    throw createAuthError(500, "Chyba pri načítavaní výdaja.");
+    throw createAuthError(500, "Chyba pri načítavaní výdajov.");
   }
+
+  const activeAssignments = (assignments || []) as EquipmentAssignment[];
 
   const { count: activeCount, error: countError } = await supabase
     .from("equipment_assignments")
@@ -398,9 +401,10 @@ export async function getEquipmentById(equipmentId: string): Promise<EquipmentIt
     ...item,
     category: item.category ?? null,
     vehicle_details: (vehicle as VehicleDetails | null) ?? null,
-    current_assignment: (assignment as EquipmentAssignment | null) ?? null,
+    current_assignment: activeAssignments[0] ?? null,
+    active_assignments: activeAssignments,
     recent_maintenance: (maintenance || []) as MaintenanceLog[],
-    active_assignments_count: activeCount ?? 0,
+    active_assignments_count: activeCount ?? activeAssignments.length,
   };
 }
 

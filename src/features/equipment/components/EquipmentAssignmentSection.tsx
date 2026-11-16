@@ -173,13 +173,14 @@ function AssignModal({
 
 function ReturnModal({
   item,
+  assignmentId,
   onClose,
 }: {
   item: EquipmentItemDetail;
+  assignmentId: string;
   onClose: () => void;
 }) {
   const router = useRouter();
-  const assignment = item.current_assignment;
   const [state, formAction, pending] = useActionState(returnEquipmentAction, null);
 
   useEffect(() => {
@@ -207,7 +208,7 @@ function ReturnModal({
               {state.message}
             </p>
           ) : null}
-          {assignment ? <input type="hidden" name="assignment_id" value={assignment.id} /> : null}
+          <input type="hidden" name="assignment_id" value={assignmentId} />
           <input type="hidden" name="equipment_id" value={item.id} />
           <div>
             <label htmlFor="condition_on_return" className="mb-1.5 block text-sm font-medium text-gray-700">
@@ -248,76 +249,91 @@ export function EquipmentAssignmentSection({
   canEdit: boolean;
 }) {
   const [assigning, setAssigning] = useState(false);
-  const [returning, setReturning] = useState(false);
-  const assignment = item.current_assignment;
+  const [returningAssignmentId, setReturningAssignmentId] = useState<string | null>(null);
 
-  const memberName = assignment?.member
-    ? `${assignment.member.first_name} ${assignment.member.last_name}`
-    : null;
+  const activeAssignments = item.active_assignments || (item.current_assignment ? [item.current_assignment] : []);
+  const totalQuantity = Number(item.quantity ?? 1);
+  const activeCount = activeAssignments.length;
+  const available = totalQuantity - activeCount;
 
   return (
-    <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-      <h2 className="flex items-center gap-2 text-lg font-bold text-gray-900">
-        <UserRound className="h-5 w-5 text-gray-400" /> Priradenie členovi
-      </h2>
+    <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm space-y-4">
+      <div className="flex items-center justify-between">
+        <h2 className="flex items-center gap-2 text-lg font-bold text-gray-900">
+          <UserRound className="h-5 w-5 text-gray-400" /> Priradenie členom
+        </h2>
+        <div className="text-xs text-gray-500 font-medium">
+          Dostupné: <span className="font-bold text-gray-900">{available}</span> / {totalQuantity} ks
+        </div>
+      </div>
 
-      {assignment && memberName ? (
-        <div className="mt-4 space-y-2">
-          <div className="rounded-lg border border-blue-100 bg-blue-50/50 p-3">
-            <p className="text-sm font-semibold text-gray-900">{memberName}</p>
-            {assignment.member?.member_number ? (
-              <p className="text-xs text-gray-500">Č. člen: {assignment.member.member_number}</p>
-            ) : null}
-            <p className="mt-1 text-xs text-gray-500">
-              Priradené: {formatDateTime(assignment.assigned_at)}
-            </p>
-            {assignment.condition_on_assign ? (
-              <div className="mt-2 flex items-center gap-2">
-                <span className="text-xs text-gray-500">Stav pri odovzdaní:</span>
-                <ConditionBadge condition={assignment.condition_on_assign} />
+      {activeAssignments.length > 0 ? (
+        <div className="space-y-3">
+          <p className="text-xs font-semibold text-gray-500 uppercase">Aktívne priradenia ({activeCount}):</p>
+          {activeAssignments.map((assignment) => {
+            const memberName = assignment.member
+              ? `${assignment.member.first_name} ${assignment.member.last_name}`
+              : "Neznámy člen";
+            return (
+              <div key={assignment.id} className="rounded-lg border border-blue-100 bg-blue-50/50 p-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div className="space-y-1">
+                  <p className="text-sm font-semibold text-gray-900">{memberName}</p>
+                  {assignment.member?.member_number ? (
+                    <p className="text-xs text-gray-500">Č. člen: {assignment.member.member_number}</p>
+                  ) : null}
+                  <p className="text-xs text-gray-500">
+                    Priradené: {formatDateTime(assignment.assigned_at)}
+                  </p>
+                  {assignment.condition_on_assign ? (
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-gray-500">Stav:</span>
+                      <ConditionBadge condition={assignment.condition_on_assign} />
+                    </div>
+                  ) : null}
+                  {assignment.notes ? (
+                    <p className="text-xs text-gray-500">Poznámka: {assignment.notes}</p>
+                  ) : null}
+                </div>
+                {canEdit ? (
+                  <button
+                    type="button"
+                    onClick={() => setReturningAssignmentId(assignment.id)}
+                    className="inline-flex min-h-[38px] items-center justify-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 text-xs font-semibold text-gray-800 transition hover:bg-gray-50 shrink-0"
+                  >
+                    <Undo2 className="h-3.5 w-3.5" /> Vrátiť
+                  </button>
+                ) : null}
               </div>
-            ) : null}
-            {assignment.notes ? (
-              <p className="mt-1 text-xs text-gray-500">Poznámka: {assignment.notes}</p>
-            ) : null}
-          </div>
-          {canEdit ? (
-            <button
-              type="button"
-              onClick={() => setReturning(true)}
-              className="inline-flex min-h-[44px] items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 text-sm font-semibold text-gray-800 transition hover:bg-gray-50"
-            >
-              <Undo2 className="h-4 w-4" /> Vrátiť do skladu / výdajne
-            </button>
-          ) : null}
+            );
+          })}
         </div>
       ) : (
-        <div className="mt-4">
-          <p className="text-sm text-gray-500">Položka je na sklade.</p>
-          <p className="text-xs text-gray-400">
-            Voľných kusov:{" "}
-            <span className="font-semibold">
-              {Number(item.quantity ?? 1) - (item.active_assignments_count ?? 0)}
-            </span>{" "}
-            z {item.quantity ?? 1}
-          </p>
-          {canEdit && (Number(item.quantity ?? 1) - (item.active_assignments_count ?? 0)) > 0 ? (
-            <button
-              type="button"
-              onClick={() => setAssigning(true)}
-              className="mt-3 inline-flex min-h-[44px] items-center gap-2 rounded-lg bg-[#C62828] px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-[#8E0000]"
-            >
-              <Plus className="h-4 w-4" /> Priradiť členovi DHZ
-            </button>
-          ) : null}
+        <div>
+          <p className="text-sm text-gray-500">Položka je celá na sklade.</p>
         </div>
       )}
+
+      {canEdit && available > 0 ? (
+        <div>
+          <button
+            type="button"
+            onClick={() => setAssigning(true)}
+            className="inline-flex min-h-[44px] items-center gap-2 rounded-lg bg-[#C62828] px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-[#8E0000]"
+          >
+            <Plus className="h-4 w-4" /> Priradiť ďalšiemu členovi
+          </button>
+        </div>
+      ) : available <= 0 ? (
+        <p className="text-xs font-semibold text-amber-600 bg-amber-50 p-2 rounded-lg border border-amber-200">
+          Položka momentálne nie je skladom (0 voľných kusov).
+        </p>
+      ) : null}
 
       {assigning ? (
         <AssignModal item={item} members={members} onClose={() => setAssigning(false)} />
       ) : null}
-      {returning ? (
-        <ReturnModal item={item} onClose={() => setReturning(false)} />
+      {returningAssignmentId ? (
+        <ReturnModal item={item} assignmentId={returningAssignmentId} onClose={() => setReturningAssignmentId(null)} />
       ) : null}
     </section>
   );
