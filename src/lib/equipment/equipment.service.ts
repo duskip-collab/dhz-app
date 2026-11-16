@@ -326,6 +326,48 @@ export async function getEquipmentItems(
   return (data || []) as EquipmentItem[];
 }
 
+export type EquipmentPhotoGalleryItem = Pick<
+  EquipmentItem,
+  "id" | "name" | "category_id" | "photo_path"
+>;
+
+export async function getEquipmentPhotoGalleryItems(params: {
+  category_id?: string;
+  search?: string;
+  limit?: number;
+  offset?: number;
+} = {}): Promise<{ items: EquipmentPhotoGalleryItem[]; total: number }> {
+  const ctx = await requireAuthenticated();
+  await assertPermission(ctx, PERMISSIONS.INVENTORY_VIEW);
+
+  const supabase = await createClient();
+  let query = supabase
+    .from("equipment_items")
+    .select("id, name, category_id, photo_path", { count: "exact" })
+    .not("photo_path", "is", null)
+    .order("name", { ascending: true })
+    .order("id", { ascending: true });
+
+  if (params.category_id) query = query.eq("category_id", params.category_id);
+  const search = params.search?.trim().slice(0, 100);
+  if (search) query = query.ilike("name", `%${search}%`);
+
+  const limit = Math.min(Math.max(Math.floor(params.limit ?? 24), 1), 100);
+  const offset = Math.max(Math.floor(params.offset ?? 0), 0);
+  query = query.range(offset, offset + limit - 1);
+
+  const { data, error, count } = await query;
+  if (error) {
+    console.error("[getEquipmentPhotoGalleryItems] Supabase error:", error);
+    throw createAuthError(500, "Chyba pri načítavaní galérie inventára.");
+  }
+
+  return {
+    items: (data ?? []) as EquipmentPhotoGalleryItem[],
+    total: count ?? 0,
+  };
+}
+
 
 // =============================================================================
 // READ – getEquipmentById

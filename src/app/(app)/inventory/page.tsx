@@ -1,4 +1,5 @@
-import { Package, Wrench } from "lucide-react";
+import { Images, Package, Wrench } from "lucide-react";
+import Link from "next/link";
 import { requirePermission } from "@/lib/auth/server";
 import { PERMISSIONS, hasPermission } from "@/lib/auth/permissions";
 import {
@@ -54,7 +55,15 @@ export default async function InventoryPage({
             <Wrench className="h-4 w-4" /> Prehľad majetku, výstroje a vozidiel hasičského zboru
           </p>
         </div>
-        {canEdit ? <NewEquipmentButton categories={categories} /> : null}
+        <div className="flex flex-wrap gap-2">
+          <Link href="/inventory/gallery">
+            <span className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-4 text-sm font-semibold text-gray-800 transition hover:bg-gray-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#C62828] focus-visible:outline-offset-2">
+              <Images className="h-4 w-4" aria-hidden="true" />
+              Zobraziť galériu
+            </span>
+          </Link>
+          {canEdit ? <NewEquipmentButton categories={categories} /> : null}
+        </div>
       </div>
 
       <EquipmentStats items={items} expiring={expiring} />

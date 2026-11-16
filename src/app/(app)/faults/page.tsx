@@ -68,7 +68,6 @@ export default async function FaultsPage({
   const inProgressCount = faults.filter((f) => f.status === "IN_PROGRESS").length;
   const resolvedCount = faults.filter((f) => f.status === "RESOLVED").length;
   const closedCount = faults.filter((f) => f.status === "CLOSED").length;
-            </select>
           </div>
           <div>
             <label htmlFor="f-title" className="block text-sm font-medium text-gray-700 mb-1">Názov poruchy *</label>
