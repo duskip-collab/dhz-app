@@ -18,6 +18,7 @@ export const FaultInput = z.object({
   description: z.string().max(2000, "Popis je príliš dlhý").nullable().optional(),
   severity: z.enum(FaultSeverity).default("MEDIUM"),
   priority: z.enum(FaultPriority).default("NORMAL"),
+  assigned_to: z.string().uuid("Neplatný riešiteľ").nullable().optional(),
 });
 
 export type FaultInput = z.infer<typeof FaultInput>;
