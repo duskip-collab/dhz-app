@@ -30,6 +30,9 @@ export const InventoryCheckItemVerify = z.object({
   found: z.boolean({ message: "Výsledok overenia je povinný" }),
   condition_found: z.string().max(100).nullable().optional(),
   notes: z.string().max(1000, "Poznámka je príliš dlhá").nullable().optional(),
+  assigned_to: z.string().uuid("Neplatný člen").nullable().optional(),
+  quantity: z.number().int().positive("Množstvo musí byť kladné celé číslo").max(1000, "Premieršie číslo"),
+
 });
 
 export type InventoryCheckItemVerify = z.infer<typeof InventoryCheckItemVerify>;

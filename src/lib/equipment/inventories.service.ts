@@ -32,6 +32,8 @@ export interface InventoryCheck {
   created_by: string | null;
   created_at: string;
   updated_at: string;
+  assigned_to: string | null;
+  quantity: number | null;
 }
 
 export interface InventoryCheckItem {
@@ -44,6 +46,8 @@ export interface InventoryCheckItem {
   verified_by: string | null;
   verified_at: string | null;
   created_at: string;
+  assigned_to: string | null;
+  quantity: number | null;
   equipment?: {
     id: string;
     name: string;
@@ -58,6 +62,8 @@ export interface InventoryCheckDetail extends InventoryCheck {
   verified: number;
   found_count: number;
   missing_count: number;
+  assigned_to: string | null;
+  quantity: number | null;
 }
 
 // =============================================================================
@@ -273,6 +279,8 @@ export async function verifyInventoryItem(
       found: parsed.data.found,
       condition_found: parsed.data.condition_found ?? null,
       notes: parsed.data.notes ?? null,
+      assigned_to: parsed.data.assigned_to ?? null,
+      quantity: parsed.data.quantity ?? null,
       verified_by: ctx.userId,
       verified_at: new Date().toISOString(),
     } as never)
