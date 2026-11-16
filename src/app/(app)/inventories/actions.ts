@@ -83,6 +83,10 @@ export async function verifyInventoryItemAction(formData: FormData): Promise<voi
       found: foundRaw === "true",
       condition_found: field(formData, "condition_found"),
       notes: field(formData, "notes"),
+      assigned_to: field(formData, "assigned_to") || undefined,
+      quantity: field(formData, "quantity") !== "" && !isNaN(Number(field(formData, "quantity")))
+        ? Number(field(formData, "quantity"))
+        : 0,
     });
     revalidatePath(`/inventories/${checkId}`);
   } catch (error) {
