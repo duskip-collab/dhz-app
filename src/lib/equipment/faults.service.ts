@@ -241,7 +241,6 @@ export async function updateFault(faultId: string, input: FaultUpdate): Promise<
     payload.resolved_at = null;
   }
 
-  const supabase = await createClient();
   const { data, error } = await supabase
     .from("equipment_faults")
     .update(payload as never)
